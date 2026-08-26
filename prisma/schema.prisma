@@ -75,6 +75,7 @@ model User {
   userQuests          UserQuest[]
   streak              Streak?
   streakProtections   Int            @default(0) // items that protect 1 day of lost streak
+  verifications       QuestVerification[]
 }
 
 model RefreshToken {
@@ -203,6 +204,7 @@ model Quest {
   updatedAt     DateTime       @updatedAt
 
   userQuests UserQuest[]
+  verifications QuestVerification[]
 }
 
 model UserQuest {
@@ -217,6 +219,7 @@ model UserQuest {
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   quest Quest @relation(fields: [questId], references: [id], onDelete: Cascade)
+  verifications QuestVerification[]
 
   @@unique([userId, questId])
   @@index([userId])
@@ -236,4 +239,51 @@ model Streak {
   updatedAt       DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── VERIFICATION MODEL ────────────────────────────
+
+enum VerificationStatus {
+  pending
+  analyzing
+  verified
+  rejected
+  needs_review
+}
+
+enum EvidenceType {
+  photo
+  video
+  audio
+  text
+  location
+}
+
+model QuestVerification {
+  id            String             @id @default(uuid())
+  userId        String
+  questId       String
+  userQuestId   String
+  evidenceType  EvidenceType
+  evidenceUrl   String?            // Cloudinary URL for photo/video/audio
+  evidenceText  String?            // Text description
+  location      Json?              // { lat, lng, name? }
+  status        VerificationStatus @default(pending)
+  aiAnalysis    Json?              // { confidence, tags, notes, isAuthentic }
+  rejectionReason String?
+  attemptNumber Int                @default(1) // which attempt (max 3)
+  reviewerId    String?            // for manual review
+  reviewNote    String?
+  submittedAt   DateTime           @default(now())
+  reviewedAt    DateTime?
+  createdAt     DateTime           @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quest Quest @relation(fields: [questId], references: [id], onDelete: Cascade)
+  userQuest UserQuest @relation(fields: [userQuestId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([questId])
+  @@index([userQuestId])
+  @@index([status])
 }

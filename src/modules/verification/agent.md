@@ -1,58 +1,84 @@
-# 📸 Verification (Verificación de Evidencia) — Agent Rules
+# 📸 Verification — Agent Rules
 
 > **Antes de trabajar aquí, LEER este archivo.**
+> **Ruta:** `src/modules/verification/`
 
 ---
 
-## 📌 PROPÓSITO
+## ✅ LO QUE SE IMPLEMENTÓ
 
-Sistema que comprueba que el usuario realmente realizó una misión en **Haru**.
+### Sistema de Verificación con Groq Vision AI
 
-El usuario sube evidencia y Haru verifica que sea válida.
+El usuario sube evidencia. **Groq Vision** (`qwen/qwen3.6-27b`) analiza la imagen en tiempo real. Gratis, sin tarjeta.
 
----
+### 🤖 IA Real: Groq Vision
 
-## 📸 TIPOS DE EVIDENCIA
+| Feature | Detalle |
+|---------|---------|
+| **Modelo** | `qwen/qwen3.6-27b` (27B params, multimodal) |
+| **Costo** | ✅ GRATIS (tier gratuito: 30 RPM) |
+| **Velocidad** | ~500 tokens/segundo ⚡ |
+| **Imágenes** | URL de Cloudinary o base64 |
+| **Texto** | Análisis de coherencia y relevancia |
+| **Fallback** | Mock inteligente si Groq no está disponible |
 
-| Tipo | Descripción |
-|------|-------------|
-| 📸 Foto | Fotografía del momento/actividad |
-| 🎥 Video | Video corto de la actividad |
-| 🎤 Audio | Grabación de audio |
-| 📝 Texto | Descripción de la experiencia |
-| 📍 Ubicación | GPS del lugar (cuando sea necesario) |
+### Cómo funciona el análisis
 
----
-
-## 🤖 ANÁLISIS CON IA
-
-La IA analiza la evidencia:
-- ¿Existe el objeto/actividad mencionada?
-- ¿La evidencia es auténtica (no es screenshot, no es repetida)?
-- ¿Coincide con la misión?
-
-**Ejemplo:**
 ```
-Misión: "Encuentra una flor amarilla."
-Usuario sube foto.
-IA analiza:
-  🌼 ¿Existe una flor? → Sí
-  🟡 ¿Color amarillo? → Detectado
-  📸 ¿Evidencia válida? → Sí
-  ✅ Misión verificada.
+Foto subida → Cloudinary URL
+       ↓
+Groq Vision (qwen/qwen3.6-27b)
+       ↓
+Prompt especializado:
+  "¿Existe el objeto de la misión?"
+  "¿Es auténtica? (no screenshot)"
+  "¿Coincide con la misión?"
+       ↓
+Respuesta JSON:
+  { confidence: 87, isAuthentic: true, tags: ["flower", "yellow"], ... }
+       ↓
+≥80% → ✅ verified
+50-79% → ⚠️ needs_review
+<50% → 🔴 rejected
 ```
 
----
+### Setup
 
-## 📊 ESTADOS
+1. Crear cuenta gratis en [console.groq.com](https://console.groq.com)
+2. Obtener API key (empieza con `gsk_`)
+3. Agregar a `.env`:
+```
+GROQ_API_KEY=gsk_tu_key_aquí
+```
+4. ¡Listo! El análisis de fotos es gratuito.
 
-| Estado | Emoji | Descripción |
-|--------|-------|-------------|
-| Pending | ⏳ | Esperando revisión |
-| Analyzing | 🤖 | IA analizando la evidencia |
-| Verified | 🟢 | Evidencia válida, misión completada |
-| Rejected | 🔴 | Evidencia rechazada |
-| NeedsReview | ⚠️ | Requiere revisión manual |
+### Tipos de evidencia
+
+| Tipo | Análisis IA | Costo |
+|------|------------|-------|
+| 📸 Foto | Groq Vision real | Gratis |
+| 🎥 Video | Groq Vision (primer frame) | Gratis |
+| 🎤 Audio | Mock (futuro: Whisper) | Gratis |
+| 📝 Texto | Groq chat completion | Gratis |
+| 📍 Ubicación | Auto-verificado (GPS) | Gratis |
+
+### Endpoints (6)
+
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `POST /api/verification/submit/:questId` | 🔒 | Subir foto/video/audio |
+| `POST /api/verification/submit-text/:questId` | 🔒 | Subir texto |
+| `POST /api/verification/submit-location/:questId` | 🔒 | Subir ubicación GPS |
+| `GET /api/verification/status/:questId` | 🔒 | Estado + intentos restantes |
+| `GET /api/verification/me` | 🔒 | Historial de verificaciones |
+| `PATCH /api/verification/review/:id` | 🔒 | Admin: revisión manual |
+
+### Anti-fraud
+
+- Duplicados: misma imagen en otra misión → rechazada
+- Límite: máx 3 intentos por misión
+- Screenshots detectados por IA
+- Validación MIME + tamaño (10MB max)
 
 ---
 
@@ -60,55 +86,13 @@ IA analiza:
 
 ```text
 QuestVerification
-├── id
-├── userId
-├── questId
-├── userQuestId
-├── evidenceType (photo | video | audio | text | location)
-├── evidenceUrl (Cloudinary)
-├── evidenceText (optional)
-├── location (optional, JSON: lat, lng)
+├── id, userId, questId, userQuestId
+├── evidenceType, evidenceUrl, evidenceText, location
 ├── status (pending | analyzing | verified | rejected | needs_review)
-├── aiAnalysis (JSON: confidence, tags, notes)
-├── reviewerId (optional, for manual review)
-├── reviewNote (optional)
-├── submittedAt
-├── reviewedAt
-└── createdAt
+├── aiAnalysis (JSON: confidence, tags, notes, isAuthentic, matchesQuest, flags)
+├── attemptNumber (1-3), rejectionReason
+├── reviewerId, reviewNote, submittedAt, reviewedAt
 ```
-
----
-
-## 🔄 FLUJO
-
-```
-Usuario completa misión
-       ↓
-Sube evidencia (foto/video/texto)
-       ↓
-Se guarda en Cloudinary
-       ↓
-Estado: analyzing
-       ↓
-IA analiza la evidencia
-       ├── Verified → +XP +Coins → crear recuerdo
-       ├── Rejected → notificar al usuario
-       └── NeedsReview → revisión manual
-```
-
----
-
-## 🔑 REGLAS
-
-1. **La IA analiza, pero puede haber revisión manual** si la confianza es baja.
-2. **No aceptar evidencias duplicadas** (misma imagen para diferentes misiones).
-3. **No aceptar screenshots** de otras apps.
-4. **La evidencia se almacena en Cloudinary** con optimización.
-5. **El usuario puede apelar** un rechazo (futuro).
-6. **Máximo 3 evidencias por misión** antes de requerir revisión manual.
-7. **La ubicación es opcional** pero ayuda a verificar.
-8. **Logging:** `[VerificationService] Operation: details`
-9. **Transacción atómica:** verificar evidencia + actualizar UserQuest + entregar recompensa.
 
 ---
 
@@ -116,4 +100,5 @@ IA analiza la evidencia
 
 | Fecha | Cambio | Responsable |
 |-------|--------|-------------|
-| — | Pendiente de implementar | — |
+| 2026-08-26 | Verificación completa: 5 tipos, anti-fraud, 6 endpoints | Buffy |
+| 2026-08-26 | Groq Vision AI real (qwen/qwen3.6-27b, gratis) | Buffy |

@@ -9,6 +9,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { CloudinaryModule } from './modules/common/cloudinary/cloudinary.module';
 import { MongoModule } from './modules/common/mongo/mongo.module';
+import { GroqModule } from './modules/common/groq/groq.module';
 
 @Module({
   imports: [
@@ -32,6 +33,9 @@ import { MongoModule } from './modules/common/mongo/mongo.module';
 
     // Cloudinary (global)
     CloudinaryModule,
+
+    // Groq Vision AI (global)
+    GroqModule,
 
     // Auth + all modules
     AuthModule,
