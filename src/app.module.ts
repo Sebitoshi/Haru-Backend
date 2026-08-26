@@ -10,6 +10,7 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { CloudinaryModule } from './modules/common/cloudinary/cloudinary.module';
 import { MongoModule } from './modules/common/mongo/mongo.module';
 import { GroqModule } from './modules/common/groq/groq.module';
+import { GeofenceModule } from './modules/common/geofence/geofence.module';
 
 @Module({
   imports: [
@@ -36,6 +37,9 @@ import { GroqModule } from './modules/common/groq/groq.module';
 
     // Groq Vision AI (global)
     GroqModule,
+
+    // Geofence (OpenStreetMap - free)
+    GeofenceModule,
 
     // Auth + all modules
     AuthModule,

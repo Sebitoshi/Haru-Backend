@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
 import { GroqVisionService } from '../common/groq/groq-vision.service';
+import { GeofenceService } from '../common/geofence/geofence.service';
 import { EvidenceType, VerificationStatus } from '@prisma/client';
 
 // ─── AI ANALYSIS MOCK ───────────────────────────────
@@ -35,6 +36,7 @@ export class VerificationService {
     private prisma: PrismaService,
     private cloudinary: CloudinaryService,
     private groqVision: GroqVisionService,
+    private geofence: GeofenceService,
   ) {}
 
   // ─── SUBMIT EVIDENCE ──────────────────────────────
@@ -293,17 +295,108 @@ export class VerificationService {
         );
         break;
 
+      case 'audio':
+        // Use Groq Whisper to transcribe + analyze audio
+        try {
+          if (verification.evidenceUrl) {
+            // Fetch audio from Cloudinary
+            const audioResponse = await fetch(verification.evidenceUrl);
+            const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+            const mimeType = audioResponse.headers.get('content-type') || 'audio/mpeg';
+
+            const audioResult = await this.groqVision.analyzeAudio(
+              audioBuffer,
+              mimeType,
+              quest.title,
+              quest.category,
+              quest.description,
+            );
+
+            aiResult = {
+              ...audioResult,
+              tags: [...(audioResult.tags || []), 'audio', 'whisper'],
+              rawResponse: JSON.stringify({
+                transcription: audioResult.transcription,
+                analysis: { confidence: audioResult.confidence, notes: audioResult.notes },
+              }),
+            };
+          } else {
+            aiResult = {
+              confidence: 40,
+              isAuthentic: false,
+              tags: ['audio', 'no_file'],
+              notes: 'Audio file not found',
+              matchesQuest: false,
+              flags: ['missing_audio'],
+              rawResponse: 'missing_audio_file',
+            };
+          }
+        } catch (error) {
+          console.error(`[VerificationService] Audio analysis error: ${error.message}`);
+          aiResult = {
+            confidence: 30,
+            isAuthentic: false,
+            tags: ['audio', 'error'],
+            notes: `Audio analysis failed: ${error.message}`,
+            matchesQuest: false,
+            flags: ['analysis_failed'],
+            rawResponse: error.message,
+          };
+        }
+        break;
+
       case 'location':
-        // Location is auto-verified (GPS data is trustworthy)
-        aiResult = {
-          confidence: 85,
-          isAuthentic: true,
-          tags: ['location', 'gps'],
-          notes: `Location data provided: ${verification.location?.lat}, ${verification.location?.lng}`,
-          matchesQuest: true,
-          flags: [],
-          rawResponse: 'location_auto_verified',
-        };
+        // Use GeofenceService for real location validation
+        try {
+          const lat = verification.location?.lat;
+          const lng = verification.location?.lng;
+
+          if (lat && lng) {
+            const geofenceResult = await this.geofence.validateLocationForQuest(
+              lat,
+              lng,
+              quest.category,
+              quest.title,
+              quest.description,
+            );
+
+            aiResult = {
+              confidence: geofenceResult.confidence,
+              isAuthentic: true,
+              tags: [
+                'location',
+                'gps',
+                ...geofenceResult.nearbyPOIs.slice(0, 3).map((p) => p.type),
+              ],
+              notes: geofenceResult.notes,
+              matchesQuest: geofenceResult.questCategoryMatch,
+              flags: geofenceResult.questCategoryMatch ? [] : ['no_matching_poi'],
+              rawResponse: JSON.stringify(geofenceResult),
+            };
+          } else {
+            aiResult = {
+              confidence: 40,
+              isAuthentic: false,
+              tags: ['location', 'invalid'],
+              notes: 'Invalid GPS coordinates',
+              matchesQuest: false,
+              flags: ['invalid_coords'],
+              rawResponse: 'invalid_coordinates',
+            };
+          }
+        } catch (error) {
+          console.error(`[VerificationService] Geofence error: ${error.message}`);
+          // Fallback: trust GPS data
+          aiResult = {
+            confidence: 70,
+            isAuthentic: true,
+            tags: ['location', 'gps'],
+            notes: `Location data provided (geofence unavailable): ${verification.location?.lat}, ${verification.location?.lng}`,
+            matchesQuest: true,
+            flags: ['geofence_unavailable'],
+            rawResponse: 'geofence_fallback',
+          };
+        }
         break;
 
       default:

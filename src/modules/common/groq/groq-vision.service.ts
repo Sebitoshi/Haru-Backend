@@ -12,17 +12,44 @@ export interface VisionAnalysisResult {
   rawResponse: string;
 }
 
+export interface TranscriptionResult {
+  text: string;
+  language: string;
+  duration: number;
+  segments: number;
+}
+
+export interface BatchAnalysisItem {
+  id: string;
+  type: 'image' | 'text' | 'audio';
+  imageUrl?: string;
+  text?: string;
+  audioBuffer?: Buffer;
+  audioMimeType?: string;
+  questTitle: string;
+  questCategory: string;
+  questDescription: string;
+}
+
+export interface BatchAnalysisResult {
+  id: string;
+  analysis: VisionAnalysisResult;
+  transcription?: TranscriptionResult;
+  duration: number;
+}
+
 @Injectable()
 export class GroqVisionService {
   private readonly logger = new Logger(GroqVisionService.name);
   private groq: Groq | null = null;
-  private readonly model = 'qwen/qwen3.6-27b';
+  private readonly visionModel = 'qwen/qwen3.6-27b';
+  private readonly whisperModel = 'whisper-large-v3-turbo';
 
   constructor(private configService: ConfigService) {
     const apiKey = this.configService.get('GROQ_API_KEY');
     if (apiKey && apiKey !== 'gsk_your_groq_api_key_here') {
       this.groq = new Groq({ apiKey });
-      this.logger.log('Groq Vision API initialized (qwen/qwen3.6-27b)');
+      this.logger.log('Groq AI initialized — Vision: qwen/qwen3.6-27b, Audio: whisper-large-v3-turbo');
     } else {
       this.logger.warn('GROQ_API_KEY not set — using mock analysis');
     }
@@ -49,7 +76,7 @@ export class GroqVisionService {
       const prompt = this.buildAnalysisPrompt(questTitle, questCategory, questDescription);
 
       const completion = await this.groq.chat.completions.create({
-        model: this.model,
+        model: this.visionModel,
         messages: [
           {
             role: 'user',
@@ -100,7 +127,7 @@ export class GroqVisionService {
       const prompt = this.buildAnalysisPrompt(questTitle, questCategory, questDescription);
 
       const completion = await this.groq.chat.completions.create({
-        model: this.model,
+        model: this.visionModel,
         messages: [
           {
             role: 'user',
@@ -172,7 +199,7 @@ Rules:
 - Flag "does_not_match_quest" if unrelated`;
 
       const completion = await this.groq.chat.completions.create({
-        model: this.model,
+        model: this.visionModel,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.3,
         max_completion_tokens: 512,
@@ -184,6 +211,175 @@ Rules:
       this.logger.error(`Groq API error: ${error.message}`);
       return this.mockTextAnalysis(text, questCategory);
     }
+  }
+
+  // ─── TRANSCRIBE AUDIO (Whisper) ──────────────────
+  async transcribeAudio(
+    audioBuffer: Buffer,
+    mimeType: string = 'audio/mpeg',
+  ): Promise<TranscriptionResult> {
+    this.logger.log(`Transcribing audio (${audioBuffer.length} bytes, ${mimeType})`);
+
+    if (!this.groq) {
+      return {
+        text: '[Mock] Audio transcription not available without Groq API key',
+        language: 'es',
+        duration: 0,
+        segments: 0,
+      };
+    }
+
+    try {
+      // Determine file extension from MIME type
+      const extMap: Record<string, string> = {
+        'audio/mpeg': 'mp3',
+        'audio/mp3': 'mp3',
+        'audio/wav': 'wav',
+        'audio/ogg': 'ogg',
+        'audio/webm': 'webm',
+        'audio/mp4': 'mp4',
+      };
+      const ext = extMap[mimeType] || 'mp3';
+
+      // Create a File-like object for the Groq SDK
+      const uint8Array = new Uint8Array(audioBuffer);
+      const file = new File([uint8Array], `audio.${ext}`, { type: mimeType });
+
+      const transcription = await this.groq.audio.transcriptions.create({
+        file,
+        model: this.whisperModel,
+        language: 'es',
+        response_format: 'verbose_json',
+      });
+
+      this.logger.log(`Whisper transcription: ${(transcription as any).text?.substring(0, 100)}...`);
+
+      return {
+        text: (transcription as any).text || '',
+        language: (transcription as any).language || 'unknown',
+        duration: (transcription as any).duration || 0,
+        segments: (transcription as any).segments?.length || 0,
+      };
+    } catch (error) {
+      this.logger.error(`Whisper API error: ${error.message}`);
+      return {
+        text: `[Whisper error: ${error.message}]`,
+        language: 'unknown',
+        duration: 0,
+        segments: 0,
+      };
+    }
+  }
+
+  // ─── ANALYZE AUDIO (transcribe + analyze) ─────────
+  async analyzeAudio(
+    audioBuffer: Buffer,
+    mimeType: string,
+    questTitle: string,
+    questCategory: string,
+    questDescription: string,
+  ): Promise<VisionAnalysisResult & { transcription: TranscriptionResult }> {
+    this.logger.log(`Analyzing audio for quest: "${questTitle}"`);
+
+    // Step 1: Transcribe with Whisper
+    const transcription = await this.transcribeAudio(audioBuffer, mimeType);
+
+    // Step 2: Analyze the transcription text
+    const analysis = await this.analyzeText(
+      transcription.text,
+      questTitle,
+      questCategory,
+      questDescription,
+    );
+
+    return {
+      ...analysis,
+      transcription,
+    };
+  }
+
+  // ─── BATCH ANALYSIS ───────────────────────────────
+  async analyzeBatch(items: BatchAnalysisItem[]): Promise<BatchAnalysisResult[]> {
+    this.logger.log(`Batch analysis: ${items.length} items`);
+
+    const startTime = Date.now();
+
+    // Process all items in parallel
+    const results = await Promise.all(
+      items.map(async (item) => {
+        const itemStart = Date.now();
+        let analysis: VisionAnalysisResult;
+        let transcription: TranscriptionResult | undefined;
+
+        try {
+          switch (item.type) {
+            case 'image':
+              analysis = await this.analyzeImage(
+                item.imageUrl!,
+                item.questTitle,
+                item.questCategory,
+                item.questDescription,
+              );
+              break;
+
+            case 'text':
+              analysis = await this.analyzeText(
+                item.text!,
+                item.questTitle,
+                item.questCategory,
+                item.questDescription,
+              );
+              break;
+
+            case 'audio':
+              const audioResult = await this.analyzeAudio(
+                item.audioBuffer!,
+                item.audioMimeType || 'audio/mpeg',
+                item.questTitle,
+                item.questCategory,
+                item.questDescription,
+              );
+              analysis = audioResult;
+              transcription = audioResult.transcription;
+              break;
+
+            default:
+              analysis = {
+                confidence: 0,
+                isAuthentic: false,
+                tags: [],
+                notes: 'Unknown evidence type',
+                matchesQuest: false,
+                flags: ['unknown_type'],
+                rawResponse: 'unknown',
+              };
+          }
+        } catch (error) {
+          this.logger.error(`Batch item ${item.id} failed: ${error.message}`);
+          analysis = {
+            confidence: 0,
+            isAuthentic: false,
+            tags: [],
+            notes: `Analysis failed: ${error.message}`,
+            matchesQuest: false,
+            flags: ['analysis_failed'],
+            rawResponse: error.message,
+          };
+        }
+
+        return {
+          id: item.id,
+          analysis,
+          transcription,
+          duration: Date.now() - itemStart,
+        };
+      }),
+    );
+
+    const totalDuration = Date.now() - startTime;
+    this.logger.log(`Batch analysis complete: ${items.length} items in ${totalDuration}ms (avg: ${Math.round(totalDuration / items.length)}ms/item)`);
+
+    return results;
   }
 
   // ─── BUILD ANALYSIS PROMPT ────────────────────────

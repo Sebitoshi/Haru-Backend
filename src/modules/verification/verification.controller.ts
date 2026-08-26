@@ -21,12 +21,16 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { VerificationService } from './verification.service';
+import { GroqVisionService, BatchAnalysisItem } from '../common/groq/groq-vision.service';
 
 @ApiTags('Verification')
 @ApiBearerAuth()
 @Controller('verification')
 export class VerificationController {
-  constructor(private readonly verificationService: VerificationService) {}
+  constructor(
+    private readonly verificationService: VerificationService,
+    private readonly groqVision: GroqVisionService,
+  ) {}
 
   // ─── SUBMIT EVIDENCE (Photo/Video/Audio) ──────────
   @Post('submit/:questId')
@@ -131,6 +135,41 @@ export class VerificationController {
     @Query('status') status?: string,
   ) {
     return this.verificationService.getUserVerifications(req.user.id, status);
+  }
+
+  // ─── BATCH ANALYSIS ──────────────────────────────
+  @Post('batch')
+  @ApiOperation({
+    summary: '🤖 Batch analyze multiple evidence items in parallel',
+    description: 'Analyze up to 10 evidence items simultaneously for faster processing.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          maxItems: 10,
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              type: { type: 'string', enum: ['image', 'text', 'audio'] },
+              imageUrl: { type: 'string' },
+              text: { type: 'string' },
+              questTitle: { type: 'string' },
+              questCategory: { type: 'string' },
+              questDescription: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Returns analysis for each item' })
+  async batchAnalyze(@Body() body: { items: BatchAnalysisItem[] }) {
+    const items = (body.items || []).slice(0, 10); // Max 10
+    return this.groqVision.analyzeBatch(items);
   }
 
   // ─── MANUAL REVIEW (Admin) ────────────────────────
