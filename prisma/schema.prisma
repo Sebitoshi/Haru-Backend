@@ -1,0 +1,219 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── ENUMS ──────────────────────────────────────────
+
+enum QuestCategory {
+  nature        // 🌿 Naturaleza
+  creativity    // 🎨 Creatividad
+  kindness      // ❤️ Bondad
+  learning      // 🧠 Aprendizaje
+  movement      // 🏃 Movimiento
+  social        // 👥 Social
+  photography   // 📸 Fotografía
+  relaxation    // 🌙 Tranquilidad
+  adventure     // 🗺️ Aventura
+}
+
+enum QuestDifficulty {
+  easy
+  normal
+  hard
+  special
+}
+
+enum UserQuestStatus {
+  available
+  accepted
+  in_progress
+  completed
+  failed
+  skipped
+}
+
+enum QuestType {
+  daily
+  weekly
+  regular
+  special
+  ai_generated
+  surprise
+}
+
+// ─── MODELS ─────────────────────────────────────────
+
+model User {
+  id                  String         @id @default(uuid())
+  email               String         @unique
+  username            String         @unique
+  passwordHash        String?
+  googleId            String?        @unique
+  avatarUrl           String?
+  avatarPublicId      String?
+  bio                 String?
+  onboardingCompleted Boolean        @default(false)
+  emailVerified       Boolean        @default(false)
+  emailVerifyToken    String?
+  resetPasswordToken  String?
+  resetPasswordExpires DateTime?
+  deletedAt           DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  lastLoginAt         DateTime?
+
+  refreshTokens       RefreshToken[]
+  preference          UserPreference?
+  activityLogs        ActivityLog[]
+  usernameHistory     UsernameHistory[]
+  badges              UserBadge[]
+  boti                BotiCharacter?
+  userQuests          UserQuest[]
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  userAgent String?
+  ip        String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revoked   Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model UserPreference {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  theme     String   @default("system")
+  language  String   @default("es")
+  sound     Boolean  @default(true)
+  notifications Boolean @default(true)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model UsernameHistory {
+  id        String   @id @default(uuid())
+  userId    String
+  oldUsername String
+  changedAt DateTime  @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([oldUsername])
+}
+
+model Badge {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String
+  icon        String
+  category    String
+  requirement Json
+  xpReward    Int      @default(0)
+  coinsReward Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  users UserBadge[]
+}
+
+model UserBadge {
+  id        String   @id @default(uuid())
+  userId    String
+  badgeId   String
+  unlockedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+  @@index([badgeId])
+}
+
+model BotiCharacter {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  name            String   @default("BOTI")
+  expression      String   @default("calm")
+  mood            String   @default("neutral")
+  bodyType        String   @default("standard")
+  bodyColor       String   @default("#4FC3F7")
+  eyeStyle        String   @default("round")
+  mouthStyle      String   @default("smile")
+  lastInteractedAt DateTime?
+  totalInteractions Int     @default(0)
+  personality     Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── QUEST MODELS ───────────────────────────────────
+
+model Quest {
+  id            String         @id @default(uuid())
+  title         String
+  description   String
+  category      QuestCategory
+  difficulty    QuestDifficulty @default(normal)
+  duration      Int            // minutes
+  xpReward      Int
+  coinsReward   Int
+  requirements  Json?          // { minLevel: 0, requiredItems: [], etc. }
+  type          QuestType      @default(regular)
+  isAIGenerated Boolean        @default(false)
+  isActive      Boolean        @default(true)
+  maxCompletions Int?          // null = unlimited
+  expiresAt     DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  userQuests UserQuest[]
+}
+
+model UserQuest {
+  id          String         @id @default(uuid())
+  userId      String
+  questId     String
+  status      UserQuestStatus @default(available)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quest Quest @relation(fields: [questId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questId])
+  @@index([userId])
+  @@index([questId])
+  @@index([status])
+}
