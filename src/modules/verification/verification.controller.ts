@@ -6,10 +6,13 @@ import {
   Param,
   Query,
   Body,
+  Req,
+  Res,
   Request,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
@@ -170,6 +173,117 @@ export class VerificationController {
   async batchAnalyze(@Body() body: { items: BatchAnalysisItem[] }) {
     const items = (body.items || []).slice(0, 10); // Max 10
     return this.groqVision.analyzeBatch(items);
+  }
+
+  // ─── STREAMING BATCH ANALYSIS (SSE) ──────────────
+  @Post('batch-stream')
+  @ApiOperation({
+    summary: '⚡ Streaming batch — results sent as they complete (SSE)',
+    description: 'For 10+ items. Each result is pushed as it finishes, not waiting for all.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              type: { type: 'string', enum: ['image', 'text', 'audio'] },
+              imageUrl: { type: 'string' },
+              text: { type: 'string' },
+              questTitle: { type: 'string' },
+              questCategory: { type: 'string' },
+              questDescription: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  })
+  async batchAnalyzeStream(
+    @Req() req: any,
+    @Res() res: Response,
+    @Body() body: { items: BatchAnalysisItem[] },
+  ) {
+    const items = (body.items || []).slice(0, 50);
+    const total = items.length;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    // Send total count first
+    res.write(`data: ${JSON.stringify({ type: 'start', total })}\n\n`);
+
+    let completed = 0;
+    const startTime = Date.now();
+
+    // Process items concurrently but emit results as they finish
+    const promises = items.map(async (item) => {
+      const itemStart = Date.now();
+      try {
+        let analysis;
+        switch (item.type) {
+          case 'image':
+            analysis = await this.groqVision.analyzeImage(
+              item.imageUrl!, item.questTitle, item.questCategory, item.questDescription,
+            );
+            break;
+          case 'text':
+            analysis = await this.groqVision.analyzeText(
+              item.text!, item.questTitle, item.questCategory, item.questDescription,
+            );
+            break;
+          case 'audio':
+            const audioResult = await this.groqVision.analyzeAudio(
+              item.audioBuffer!, item.audioMimeType || 'audio/mpeg',
+              item.questTitle, item.questCategory, item.questDescription,
+            );
+            analysis = audioResult;
+            break;
+          default:
+            analysis = { confidence: 0, tags: [], notes: 'Unknown type', matchesQuest: false, flags: ['unknown_type'] };
+        }
+        completed++;
+        const event = {
+          type: 'result',
+          id: item.id,
+          index: completed,
+          total,
+          analysis,
+          duration: Date.now() - itemStart,
+        };
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      } catch (error) {
+        completed++;
+        const event = {
+          type: 'error',
+          id: item.id,
+          index: completed,
+          total,
+          error: error.message,
+          duration: Date.now() - itemStart,
+        };
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      }
+    });
+
+    await Promise.allSettled(promises);
+
+    // Send completion event
+    const finalEvent = {
+      type: 'done',
+      total,
+      completed,
+      totalDuration: Date.now() - startTime,
+    };
+    res.write(`data: ${JSON.stringify(finalEvent)}\n\n`);
+    res.end();
   }
 
   // ─── MANUAL REVIEW (Admin) ────────────────────────

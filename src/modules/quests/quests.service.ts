@@ -5,6 +5,8 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProgressionService } from '../progression/progression.service';
+import { AchievementsService } from '../achievements/achievements.service';
 import { StreaksService } from '../streaks/streaks.service';
 import { CreateQuestDto, QuestCategoryDto, QuestDifficultyDto } from './dto/create-quest.dto';
 import { ProposeQuestDto } from './dto/propose-quest.dto';
@@ -127,6 +129,8 @@ export class QuestsService {
   constructor(
     private prisma: PrismaService,
     private streaksService: StreaksService,
+    private progression: ProgressionService,
+    private achievements: AchievementsService,
   ) {}
 
   // ─── SEED QUESTS ──────────────────────────────────
@@ -788,7 +792,22 @@ export class QuestsService {
           ? ` 🌱 Racha anterior: ${streakDays} días. Tu aventura continúa`
           : '';
 
-    console.log(`[QuestsService] CompleteQuest: OK — "${quest.title}" +${finalXp}XP +${finalCoins} Coins (streak: ${streakDays}d, x${streakMultiplier})`);
+    // ─── CREDIT XP + COINS TO USER ────────────────
+    const progressionResult = await this.progression.addXp(userId, finalXp, 'quest_completed', {
+      questId,
+      questTitle: quest.title,
+      category: quest.category,
+      difficulty: quest.difficulty,
+      streakDays,
+      streakMultiplier,
+    });
+
+    await this.progression.addCoins(userId, finalCoins, `quest_${quest.id}`);
+
+    // ─── CHECK FOR NEW BADGES ──────────────────────
+    const badgeResult = await this.achievements.checkBadges(userId);
+
+    console.log(`[QuestsService] CompleteQuest: OK — "${quest.title}" +${finalXp}XP +${finalCoins} Coins (streak: ${streakDays}d, x${streakMultiplier}, level: ${progressionResult.level})`);
 
     return {
       userQuest: updated,
@@ -809,7 +828,15 @@ export class QuestsService {
         action: streakResult.action,
         milestone: streakResult.milestone,
       },
-      message: `🎉 Quest "${quest.title}" completed! +${finalXp} XP, +${finalCoins} 🪙${streakMessage}`,
+      progression: {
+        xpGained: progressionResult.xpGained,
+        totalXp: progressionResult.totalXp,
+        level: progressionResult.level,
+        leveledUp: progressionResult.leveledUp,
+        levelReward: progressionResult.levelReward,
+      },
+      newBadges: badgeResult.newBadges.length > 0 ? badgeResult.newBadges : undefined,
+      message: `🎉 Quest "${quest.title}" completed! +${finalXp} XP, +${finalCoins} 🪙${progressionResult.leveledUp ? ` 🎉 ¡Level ${progressionResult.level}!` : ''}${badgeResult.newBadges.length > 0 ? ` 🏆 ${badgeResult.newBadges.map((b: any) => b.icon + ' ' + b.name).join(', ')}` : ''}${streakMessage}`,
     };
   }
 

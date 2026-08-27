@@ -8,6 +8,12 @@ datasource db {
 
 // ─── ENUMS ──────────────────────────────────────────
 
+enum UserRole {
+  user
+  admin
+  superadmin
+}
+
 enum QuestCategory {
   nature        // 🌿 Naturaleza
   creativity    // 🎨 Creatividad
@@ -51,6 +57,7 @@ model User {
   id                  String         @id @default(uuid())
   email               String         @unique
   username            String         @unique
+  role                UserRole       @default(user)
   passwordHash        String?
   googleId            String?        @unique
   avatarUrl           String?
@@ -61,6 +68,9 @@ model User {
   emailVerifyToken    String?
   resetPasswordToken  String?
   resetPasswordExpires DateTime?
+  level               Int            @default(1)
+  totalXp             Int            @default(0)
+  totalCoins          Int            @default(0)
   deletedAt           DateTime?
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
@@ -75,6 +85,7 @@ model User {
   userQuests          UserQuest[]
   streak              Streak?
   streakProtections   Int            @default(0) // items that protect 1 day of lost streak
+  trust               UserTrust?
   verifications       QuestVerification[]
 }
 
@@ -239,6 +250,55 @@ model Streak {
   updatedAt       DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── TRUST MODEL ──────────────────────────────────
+
+enum TrustLevel {
+  new_user        // 👤 Recién registrado
+  trustworthy     // 🌱 Confiable (5+ misiones, sin incidentes)
+  very_trustworthy // 🌿 Muy confiable (20+ misiones, 30+ días)
+  excellent       // ⭐ Excelente reputación (50+ misiones, 90+ días)
+}
+
+model UserTrust {
+  id                String      @id @default(uuid())
+  userId            String      @unique
+  level             TrustLevel  @default(new_user)
+  score             Int         @default(50) // 0-100, starts at 50 (neutral)
+  totalAccepted     Int         @default(0)
+  totalRejected     Int         @default(0)
+  totalReports      Int         @default(0)
+  fraudAttempts     Int         @default(0)
+  cooldownUntil     DateTime?   // After fraud: no positive trust gains for 7 days
+  lastFraudAt       DateTime?   // When the last fraud was detected
+  rehabilitatedAt   DateTime?   // When rehabilitation was completed
+  scoreBeforeFraud  Int?        // Score before fraud (for rehabilitation)
+  lastEvaluatedAt   DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events TrustEvent[]
+
+  @@index([userId])
+  @@index([level])
+  @@index([score])
+}
+
+model TrustEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String   // verification_accepted, verification_rejected, report, fraud_detected, etc.
+  impact    Int      // +/- score impact
+  details   Json?    // { verificationId, questId, reason, ... }
+  createdAt DateTime @default(now())
+
+  trust UserTrust @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
 }
 
 // ─── VERIFICATION MODEL ────────────────────────────

@@ -81,20 +81,20 @@ src/
 | 2 | Autenticación (JWT, Google OAuth, Refresh Rotation) | ✅ Completado |
 | 3 | Users (perfil, badges, avatar Cloudinary, activity log, onboarding) | ✅ Completado |
 | 4 | Boti (personaje, expresiones, mood dinámico, memoria MongoDB) | ✅ Completado |
-| 5 | XP y Niveles (progression) | ⏳ Pendiente |
+| 5 | XP y Niveles (progression) | ✅ Completado |
 | 6 | Misiones (quests) | ✅ Completado |
-| 7 | Verificación de evidencia (verification) | ⏳ Pendiente |
+| 7 | Verificación de evidencia (verification) | ✅ Completado |
 | 8 | Economía (economy) | ⏳ Pendiente |
 | 9 | Tienda + Inventario (shop, inventory) | ⏳ Pendiente |
 | 10 | Personalización (customization) | ⏳ Pendiente |
-| 11 | Logros y Rachas (achievements, streaks) | ⏳ Pendiente |
-| 12 | Sistema de confianza (trust) | ⏳ Pendiente |
+| 11 | Logros y Rachas (achievements, streaks) | ✅ Completado |
+| 12 | Sistema de confianza (trust) | ✅ Completado |
 | 13 | Diario de recuerdos (diary) | ⏳ Pendiente |
 | 14 | IA / Chat con Boti (ai) | ⏳ Pendiente |
 | 15 | Amigos y Rankings (friends, rankings) | ⏳ Pendiente |
 | 16 | Colección (collection) | ⏳ Pendiente |
 | 17 | Notificaciones (notifications) | ⏳ Pendiente |
-| 18 | Panel de administración (admin) | ⏳ Pendiente |
+| 18 | Panel de administración (admin) | ✅ Completado |
 | 19 | PWA y responsive | ⏳ Pendiente |
 
 ---

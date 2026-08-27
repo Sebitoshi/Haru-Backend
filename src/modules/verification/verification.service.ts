@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
 import { GroqVisionService } from '../common/groq/groq-vision.service';
 import { GeofenceService } from '../common/geofence/geofence.service';
+import { TrustService } from '../trust/trust.service';
 import { EvidenceType, VerificationStatus } from '@prisma/client';
 
 // ─── AI ANALYSIS MOCK ───────────────────────────────
@@ -23,6 +24,7 @@ interface AIAnalysisResult {
 
 // ─── EVIDENCE VALIDATION ────────────────────────────
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MIN_AUDIO_DURATION = 5; // seconds — reject accidental short recordings
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
 const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm'];
@@ -37,6 +39,7 @@ export class VerificationService {
     private cloudinary: CloudinaryService,
     private groqVision: GroqVisionService,
     private geofence: GeofenceService,
+    private trustService: TrustService,
   ) {}
 
   // ─── SUBMIT EVIDENCE ──────────────────────────────
@@ -143,6 +146,22 @@ export class VerificationService {
     });
 
     console.log(`[VerificationService] Analyze: ${analysis.status} (confidence: ${analysis.confidence}%)`);
+
+    // Record trust event based on AI result
+    if (analysis.status === 'verified') {
+      await this.trustService.recordEvent(userId, 'verification_accepted', {
+        verificationId: verification.id,
+        questId,
+        confidence: analysis.confidence,
+      });
+    } else if (analysis.status === 'rejected') {
+      await this.trustService.recordEvent(userId, 'verification_rejected', {
+        verificationId: verification.id,
+        questId,
+        confidence: analysis.confidence,
+        reason: analysis.notes,
+      });
+    }
 
     return {
       verification: updated,
@@ -254,6 +273,15 @@ export class VerificationService {
     });
 
     console.log(`[VerificationService] ManualReview: OK — ${decision}`);
+
+    // Record trust event
+    const trustType = decision === 'verified' ? 'verification_accepted' : 'verification_rejected';
+    await this.trustService.recordEvent(verification.userId, trustType, {
+      verificationId,
+      questId: verification.questId,
+      reviewerId,
+      note,
+    });
 
     return {
       verification: updated,
@@ -461,6 +489,17 @@ export class VerificationService {
       throw new BadRequestException(
         `Invalid file type: ${file.mimetype}. Allowed: images, videos, audio`,
       );
+    }
+
+    // Audio length validation: reject files shorter than 5 seconds
+    // Heuristic: for MP3 at 128kbps, ~16KB/s. 5s ≈ 80KB
+    if (ALLOWED_AUDIO_TYPES.includes(file.mimetype)) {
+      const estimatedDurationSec = file.size / (16 * 1024); // rough estimate at 128kbps
+      if (estimatedDurationSec < MIN_AUDIO_DURATION && file.size < 100 * 1024) {
+        throw new BadRequestException(
+          `Audio too short (≈${Math.round(estimatedDurationSec)}s). Minimum ${MIN_AUDIO_DURATION} seconds required. Speak clearly about your quest!`,
+        );
+      }
     }
   }
 
