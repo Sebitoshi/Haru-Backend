@@ -908,4 +908,376 @@ export class AdminService {
       },
     });
   }
+
+  // ═══════════════════════════════════════════════════
+  // 🗂️ CATEGORY MANAGEMENT
+  // ═══════════════════════════════════════════════════
+
+  async getCategories() {
+    const categories = [
+      { id: 'nature', emoji: '🌿', name: 'Naturaleza', description: 'Actividades al aire libre' },
+      { id: 'creativity', emoji: '🎨', name: 'Creatividad', description: 'Actividades creativas' },
+      { id: 'kindness', emoji: '❤️', name: 'Bondad', description: 'Actos de bondad' },
+      { id: 'learning', emoji: '🧠', name: 'Aprendizaje', description: 'Aprendizaje' },
+      { id: 'movement', emoji: '🏃', name: 'Movimiento', description: 'Ejercicio y movimiento' },
+      { id: 'social', emoji: '👥', name: 'Social', description: 'Interacción social' },
+      { id: 'photography', emoji: '📸', name: 'Fotografía', description: 'Capturar momentos' },
+      { id: 'relaxation', emoji: '🌙', name: 'Tranquilidad', description: 'Descanso y desconexión' },
+      { id: 'adventure', emoji: '🗺️', name: 'Aventura', description: 'Exploración y aventura' },
+    ];
+
+    // Get quest count per category
+    const questCounts = await this.prisma.quest.groupBy({
+      by: ['category'],
+      _count: { id: true },
+    });
+
+    const countMap = new Map(questCounts.map((q) => [q.category, q._count.id]));
+
+    return categories.map((c) => ({
+      ...c,
+      questCount: countMap.get(c.id as any) || 0,
+      isActive: true,
+    }));
+  }
+
+  async updateCategory(adminId: string, categoryId: string, data: { name?: string; description?: string; isActive?: boolean }) {
+    this.logger.log(`UpdateCategory: ${categoryId}`);
+    // Categories are enum-based, so we update the config
+    const config = await this.prisma.systemConfig.upsert({
+      where: { key: `category_${categoryId}` },
+      update: { value: data, updatedBy: adminId },
+      create: { key: `category_${categoryId}`, value: data, category: 'categories', updatedBy: adminId },
+    });
+
+    await this.logAdminAction(adminId, 'admin_category_update', categoryId, data);
+    return { category: categoryId, config };
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 📝 REPORT MANAGEMENT
+  // ═══════════════════════════════════════════════════
+
+  async getReports(status?: string, page: number = 1, limit: number = 20) {
+    const where: any = {};
+    if (status) where.status = status;
+
+    const [reports, total] = await Promise.all([
+      this.prisma.report.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.report.count({ where }),
+    ]);
+
+    // Enrich with user info
+    const userIds = [...new Set([
+      ...reports.map((r) => r.reporterId),
+      ...reports.filter((r) => r.targetUserId).map((r) => r.targetUserId!),
+    ])];
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, username: true, avatarUrl: true, email: true },
+    });
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    return {
+      reports: reports.map((r) => ({
+        ...r,
+        reporter: userMap.get(r.reporterId) || null,
+        targetUser: r.targetUserId ? userMap.get(r.targetUserId) || null : null,
+      })),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  async reviewReport(adminId: string, reportId: string, status: string, note?: string) {
+    this.logger.log(`ReviewReport: ${reportId} → ${status}`);
+
+    const report = await this.prisma.report.findUnique({ where: { id: reportId } });
+    if (!report) throw new NotFoundException('Report not found');
+
+    const updated = await this.prisma.report.update({
+      where: { id: reportId },
+      data: {
+        status: status as any,
+        reviewedBy: adminId,
+        reviewNote: note || null,
+        resolvedAt: status === 'resolved' ? new Date() : null,
+      },
+    });
+
+    await this.logAdminAction(adminId, 'admin_report_review', reportId, { status, note });
+    return updated;
+  }
+
+  async getReportStats() {
+    const [pending, reviewed, resolved, dismissed, byReason] = await Promise.all([
+      this.prisma.report.count({ where: { status: 'pending' } }),
+      this.prisma.report.count({ where: { status: 'reviewed' } }),
+      this.prisma.report.count({ where: { status: 'resolved' } }),
+      this.prisma.report.count({ where: { status: 'dismissed' } }),
+      this.prisma.report.groupBy({ by: ['reason'], _count: { id: true } }),
+    ]);
+
+    return {
+      pending,
+      reviewed,
+      resolved,
+      dismissed,
+      total: pending + reviewed + resolved + dismissed,
+      byReason: byReason.map((r) => ({ reason: r.reason, count: r._count.id })),
+    };
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 🏆 RANKINGS MANAGEMENT
+  // ═══════════════════════════════════════════════════
+
+  async getRankingsConfig() {
+    const config = await this.prisma.systemConfig.findUnique({ where: { key: 'rankings_config' } });
+    return config?.value || {
+      weeklyResetEnabled: true,
+      resetDay: 'monday',
+      topPositionsRewarded: true,
+      rewards: { 1: { xp: 500, coins: 250 }, 2: { xp: 300, coins: 150 }, 3: { xp: 200, coins: 100 } },
+    };
+  }
+
+  async updateRankingsConfig(adminId: string, config: any) {
+    const updated = await this.prisma.systemConfig.upsert({
+      where: { key: 'rankings_config' },
+      update: { value: config, updatedBy: adminId },
+      create: { key: 'rankings_config', value: config, category: 'rankings', updatedBy: adminId },
+    });
+    await this.logAdminAction(adminId, 'admin_rankings_config', 'system', config);
+    return updated;
+  }
+
+  async resetWeeklyRankings(adminId: string) {
+    this.logger.log('ResetWeeklyRankings');
+
+    // Snapshot current week rankings before reset
+    const topUsers = await this.prisma.user.findMany({
+      orderBy: { totalXp: 'desc' },
+      take: 100,
+      select: { id: true, username: true, totalXp: true, level: true },
+    });
+
+    await this.prisma.activityLog.create({
+      data: {
+        userId: adminId,
+        action: 'admin_weekly_rankings_reset',
+        details: {
+          snapshot: topUsers.slice(0, 10),
+          timestamp: new Date().toISOString(),
+        },
+      },
+    });
+
+    await this.logAdminAction(adminId, 'admin_weekly_rankings_reset', 'system', { topUsers: topUsers.length });
+    return { message: 'Weekly rankings reset initiated', topUsersCount: topUsers.length };
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 🪙 REWARDS CONFIGURATION
+  // ═══════════════════════════════════════════════════
+
+  async getRewardsConfig() {
+    const config = await this.prisma.systemConfig.findUnique({ where: { key: 'rewards_config' } });
+    return config?.value || {
+      xpMultiplier: 1.0,
+      coinsMultiplier: 1.0,
+      streakBonusEnabled: true,
+      streakBonusPerDay: 0.10,
+      streakBonusMax: 0.50,
+      levelUpBonusCoins: true,
+      levelUpBonusFormula: 'level * 10',
+    };
+  }
+
+  async updateRewardsConfig(adminId: string, config: any) {
+    const updated = await this.prisma.systemConfig.upsert({
+      where: { key: 'rewards_config' },
+      update: { value: config, updatedBy: adminId },
+      create: { key: 'rewards_config', value: config, category: 'rewards', updatedBy: adminId },
+    });
+    await this.logAdminAction(adminId, 'admin_rewards_config', 'system', config);
+    return updated;
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 🛡️ CONTENT MODERATION
+  // ═══════════════════════════════════════════════════
+
+  async getDiaryEntries(page: number = 1, limit: number = 20, userId?: string) {
+    const where: any = { isHidden: false };
+    if (userId) where.userId = userId;
+
+    const [entries, total] = await Promise.all([
+      this.prisma.diaryEntry.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: { user: { select: { id: true, username: true, avatarUrl: true } } },
+      }),
+      this.prisma.diaryEntry.count({ where }),
+    ]);
+
+    return {
+      entries,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  async hideDiaryEntry(adminId: string, entryId: string, reason: string) {
+    const entry = await this.prisma.diaryEntry.findUnique({ where: { id: entryId } });
+    if (!entry) throw new NotFoundException('Entry not found');
+
+    await this.prisma.diaryEntry.update({ where: { id: entryId }, data: { isHidden: true } });
+    await this.logAdminAction(adminId, 'admin_hide_diary', entryId, { reason, userId: entry.userId });
+    return { message: 'Entry hidden' };
+  }
+
+  async getActivityFeed(page: number = 1, limit: number = 20) {
+    const [activities, total] = await Promise.all([
+      this.prisma.friendActivity.findMany({
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: { user: { select: { id: true, username: true, avatarUrl: true } } },
+      }),
+      this.prisma.friendActivity.count(),
+    ]);
+
+    return {
+      activities,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  async hideActivity(adminId: string, activityId: string, reason: string) {
+    // Activities don't have isHidden, we delete them
+    const activity = await this.prisma.friendActivity.findUnique({ where: { id: activityId } });
+    if (!activity) throw new NotFoundException('Activity not found');
+
+    await this.prisma.friendActivity.delete({ where: { id: activityId } });
+    await this.logAdminAction(adminId, 'admin_hide_activity', activityId, { reason, userId: activity.userId });
+    return { message: 'Activity removed' };
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 🔍 FRAUD / SUSPICIOUS ACTIVITY DASHBOARD
+  // ═══════════════════════════════════════════════════
+
+  async getFraudDashboard() {
+    // Users with most rejected verifications
+    const rejectedAgg = await this.prisma.questVerification.groupBy({
+      by: ['userId'],
+      where: { status: 'rejected' },
+      _count: { id: true },
+    });
+
+    const topRejected = rejectedAgg
+      .sort((a, b) => b._count.id - a._count.id)
+      .slice(0, 10);
+
+    const userIds = topRejected.map((r) => r.userId);
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, username: true, email: true, level: true, avatarUrl: true },
+    });
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    // Users with low trust scores
+    const lowTrust = await this.prisma.userTrust.findMany({
+      where: { score: { lt: 30 } },
+      include: { user: { select: { id: true, username: true, email: true, avatarUrl: true } } },
+      orderBy: { score: 'asc' },
+      take: 10,
+    });
+
+    // Recent fraud alerts
+    const fraudAlerts = await this.prisma.activityLog.findMany({
+      where: { action: 'fraud_alert' },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+
+    // Users with most reports
+    const reportedAgg = await this.prisma.report.groupBy({
+      by: ['targetUserId'],
+      where: { targetUserId: { not: null } },
+      _count: { id: true },
+    });
+
+    const topReported = reportedAgg
+      .filter((r) => r.targetUserId)
+      .sort((a, b) => b._count.id - a._count.id)
+      .slice(0, 10);
+
+    const reportedUserIds = topReported.map((r) => r.targetUserId!);
+    const reportedUsers = await this.prisma.user.findMany({
+      where: { id: { in: reportedUserIds } },
+      select: { id: true, username: true, email: true, level: true },
+    });
+    const reportedUserMap = new Map(reportedUsers.map((u) => [u.id, u]));
+
+    return {
+      rejectedVerifications: topRejected.map((r) => ({
+        user: userMap.get(r.userId) || null,
+        rejectedCount: r._count.id,
+      })),
+      lowTrustUsers: lowTrust.map((t) => ({
+        userId: t.userId,
+        username: t.user.username,
+        email: t.user.email,
+        avatarUrl: t.user.avatarUrl,
+        score: t.score,
+        level: t.level,
+        fraudAttempts: t.fraudAttempts,
+      })),
+      fraudAlerts: fraudAlerts.map((a) => ({
+        id: a.id,
+        details: a.details,
+        createdAt: a.createdAt,
+      })),
+      topReportedUsers: topReported.map((r) => ({
+        user: reportedUserMap.get(r.targetUserId!) || null,
+        reportCount: r._count.id,
+      })),
+      summary: {
+        totalRejected: rejectedAgg.reduce((s, r) => s + r._count.id, 0),
+        totalLowTrust: lowTrust.length,
+        totalFraudAlerts: fraudAlerts.length,
+        totalReports: reportedAgg.reduce((s, r) => s + r._count.id, 0),
+      },
+    };
+  }
+
+  // ═══════════════════════════════════════════════════
+  // ⚙️ SYSTEM CONFIG
+  // ═══════════════════════════════════════════════════
+
+  async getSystemConfig(category?: string) {
+    const where: any = {};
+    if (category) where.category = category;
+
+    const configs = await this.prisma.systemConfig.findMany({ where, orderBy: { key: 'asc' } });
+    return configs;
+  }
+
+  async updateSystemConfig(adminId: string, key: string, value: any, description?: string) {
+    const updated = await this.prisma.systemConfig.upsert({
+      where: { key },
+      update: { value, updatedBy: adminId, description },
+      create: { key, value, category: 'general', updatedBy: adminId, description },
+    });
+    await this.logAdminAction(adminId, 'admin_config_update', key, { value });
+    return updated;
+  }
 }

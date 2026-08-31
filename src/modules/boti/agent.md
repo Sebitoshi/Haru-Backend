@@ -8,7 +8,7 @@
 
 Boti es el **compañero IA de Haru**. No es la plataforma, no es un chatbot genérico. Es el personaje que acompaña al usuario en su aventura diaria.
 
-Responsabilidades:
+### Responsabilidades:
 - Crear Boti al registrar usuario
 - Nombre, apariencia, personalidad
 - 9 expresiones con triggers contextuales
@@ -16,7 +16,10 @@ Responsabilidades:
 - Memoria contextual (MongoDB)
 - Saludos inteligentes
 - Interacciones con referencias a memoria
-- Modos: Recomendador, Motivador, Explorador, Narrador
+- **🤖 Modos IA: Recomendador, Motivador, Explorador, Narrador**
+- **🧠 Perfilamiento de comportamiento del usuario**
+- **💬 Conversación con IA (Groq)**
+- **📊 Recomendaciones personalizadas**
 
 ---
 
@@ -26,66 +29,114 @@ Responsabilidades:
 - Espontánea, ligeramente graciosa
 - No demasiado infantil ni excesivamente motivacional
 - Evita respuestas corporativas y repetitivas
+- Habla en español, tono casual y cálido
 
 ---
 
-## 😊 EXPRESIONES (9)
+## 🎭 LOS 4 MODOS DE BOTI
 
-| Código | Nombre | Trigger |
-|--------|--------|---------|
-| calm | Tranquilo | idle, return |
-| happy | Feliz | quest_completed, level_up |
-| curious | Curioso | chat_start |
-| surprised | Sorprendido | level_up, rare_drop |
-| confused | Confundido | user_indecisive |
-| tired | Cansado | late_night |
-| excited | Emocionado | rare_achievement |
-| celebrating | Celebrando | streak_7 |
-| worried | Preocupado | user_inactive > 48h |
+### 🎯 Recomendador
+> "Tengo una misión que creo que te va a gustar 🎨"
+
+- Analiza categorías favoritas del usuario
+- Sugiere misiones alineadas con gustos
+- Evita repetir categorías recientes
+- Muestra duración, dificultad, XP
+
+### 🌱 Motivador
+> "Llevas 6 días seguidos. ¡Uno más! 🔥"
+
+- Celebra logros y rachas
+- Empuja sutilmente sin ser intenso
+- Si la racha se rompe: "No pasa nada 🌱"
+- Recuerda milestones alcanzados
+
+### 🧭 Explorador
+> "Siempre eliges creatividad. Probemos aventura."
+
+- Detecta cuando el usuario se estanca
+- Empuja hacia categorías no exploradas
+- Desafía la zona de confort
+- Activa cuando consecutiveDaysSameCategory >= 3
+
+### 📖 Narrador
+> "Has recorrido bastante camino. Mira todo lo que has conseguido."
+
+- Cuenta la historia del progreso
+- Resume logros y estadísticas
+- Contexto general del nivel y XP
+- Activa para usuarios de alto nivel
 
 ---
 
-## 🎭 MOOD DINÁMICO (5 factores)
+## 📊 PERFILAMIENTO DE USUARIO
 
-| Factor | Peso | Descripción |
-|--------|------|-------------|
-| recentActivity | 25% | Logins en últimos 7 días |
-| streakHealth | 20% | Salud de la racha |
-| questProgress | 25% | Misiones completadas |
-| timeOfDay | 10% | Hora actual (mejor 9am-9pm) |
-| inactivity | 20% | Tiempo sin interacción |
+Boti analiza el comportamiento para personalizar la experiencia:
 
-Moods: `great` 😊 | `good` 🙂 | `neutral` 😐 | `bad` 😔 | `awful` 😟
+| Métrica | Cómo se calcula |
+|---------|-----------------|
+| favoriteCategories | Top 3 categorías completadas |
+| ignoredCategories | Categorías con 0 misiones |
+| preferredDifficulty | Dificultad más completada |
+| avgSessionMinutes | Promedio de duración de misiones |
+| preferredTimeOfDay | Hora del día con más actividad |
+| frequencyDaysPerWeek | Días únicos con actividad |
+| completionRate | Completadas / aceptadas × 100 |
+| explorersScore | 0-100: variedad de categorías |
+| consecutiveDaysSameCategory | Días seguidos en misma categoría |
+
+### Lógica de selección de modo:
+
+```
+Si consecutiveDaysSameCategory >= 3 → 🧭 EXPLORER
+Si explorersScore < 25 (random 50%) → 🧭 EXPLORER
+Si streak = 0 o frequency < 2 → 🌱 MOTIVADOR
+Si level >= 10 y completions >= 20 (random 30%) → 📖 NARRADOR
+Default → 🎯 RECOMMENDER
+```
 
 ---
 
-## 🧠 MEMORIA (MongoDB)
+## 💬 CONVERSACIÓN CON IA (Groq)
 
-Boti recuerda:
-- **Preferencias** — categorías favoritas, duración
-- **Eventos** — últimas interacciones, logros
-- **Hitos** — primeros logros, rachas
-- **Contexto** — patrones de uso
+Cuando `GROQ_API_KEY` está configurado, Boti usa **llama-3.3-70b-versatile** para:
 
-Cada memoria tiene `importance` (0-10) y se referencia automáticamente.
+1. **Chat contextual** — El usuario habla, Boti responde usando su perfil
+2. **Daily messages** — Mensaje diario personalizado
+3. **Modo detectado** — Analiza el mensaje del usuario para elegir modo
+
+Si no hay API key → usa templates predefinidos (fallback graceful).
 
 ---
 
 ## 📊 MODELO DE DATOS
 
-```text
-PostgreSQL (Prisma):
+### PostgreSQL (Prisma):
+```
 BotiCharacter
 ├── id, userId, name, expression, mood
 ├── bodyType, bodyColor, eyeStyle, mouthStyle
 ├── personality (JSON)
 ├── lastInteractedAt, totalInteractions
+```
 
-MongoDB (Mongoose):
+### MongoDB (Mongoose):
+```
 BotiMemory
 ├── userId, type, key, value
 ├── importance, accessCount
 ├── lastAccessedAt, expiresAt
+```
+
+### Profile (calculado, no persistido):
+```
+UserProfile
+├── favoriteCategories[], ignoredCategories[]
+├── preferredDifficulty, avgSessionMinutes
+├── preferredTimeOfDay, frequencyDaysPerWeek
+├── completionRate, explorersScore
+├── consecutiveDaysSameCategory
+└── recentMood, currentLevel, currentStreak
 ```
 
 ---
@@ -96,14 +147,15 @@ BotiMemory
 2. **Boti se crea en el registro.**
 3. **El mood se actualiza automáticamente.**
 4. **La memoria se guarda silenciosamente.** Boti la menciona naturalmente.
-5. **Logging:** `[BotiService] Operation: details`
+5. **El perfil se calcula en cada request** (no se persiste — siempre fresco).
+6. **Groq es opcional** — sin API key, Boti usa templates.
+7. **Logging:** `[BotiService|BotiAI|BotiProfileService] Operation: details`
 
 ---
 
-## ✅ LO QUE SE IMPLEMENTÓ
+## ✅ ENDPOINTS (17)
 
-### Endpoints (10)
-
+### Personaje (10)
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
 | `/api/boti/me` | GET | Boti con expresión, mood, memoria |
@@ -117,6 +169,31 @@ BotiMemory
 | `/api/boti/me/status` | GET | Estado detallado |
 | `/api/boti/expressions` | GET | Expresiones disponibles |
 
+### IA (5)
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `/api/boti/me/chat` | POST | Chat con IA (Groq) — contexto + perfil |
+| `/api/boti/me/daily` | POST | Mensaje diario de Boti |
+| `/api/boti/me/recommendations` | GET | Misiones personalizadas |
+| `/api/boti/me/profile` | GET | Perfil de comportamiento |
+| `/api/boti/modes` | GET | Info de los 4 modos |
+
+---
+
+## 📋 MÓDULOS
+
+```
+boti.module.ts          ← Module principal
+boti.service.ts         ← Personaje, expresiones, interacciones
+boti.controller.ts      ← 17 endpoints
+boti-ai.service.ts      ← Groq IA: chat, daily, modes
+boti-profile.service.ts ← Perfilamiento: categorías, frecuencia, explorer score
+boti-mood.service.ts    ← Mood dinámico (5 factores)
+boti-memory.service.ts  ← Memoria MongoDB
+dto/update-boti.dto.ts  ← DTOs de validación
+schemas/                ← Mongoose schemas
+```
+
 ---
 
 ## 📋 ACTUALIZACIONES
@@ -125,4 +202,5 @@ BotiMemory
 |-------|--------|-------------|
 | 2026-08-23 | Boti: Character, expressions, interactions | Buffy |
 | 2026-08-23 | Memory (MongoDB) + Dynamic Mood | Buffy |
-| 2026-08-25 | Clarificado: Boti es el compañero de Haru, no la plataforma | Buffy |
+| 2026-08-25 | Clarificado: Boti es el compañero de Haru | Buffy |
+| 2026-08-30 | 🤖 IA: Chat, Daily, Recommendations, Profile, 4 Modes | Buffy |

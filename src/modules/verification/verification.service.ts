@@ -9,6 +9,7 @@ import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
 import { GroqVisionService } from '../common/groq/groq-vision.service';
 import { GeofenceService } from '../common/geofence/geofence.service';
 import { TrustService } from '../trust/trust.service';
+import { DiaryService } from '../diary/diary.service';
 import { EvidenceType, VerificationStatus } from '@prisma/client';
 
 // ─── AI ANALYSIS MOCK ───────────────────────────────
@@ -40,6 +41,7 @@ export class VerificationService {
     private groqVision: GroqVisionService,
     private geofence: GeofenceService,
     private trustService: TrustService,
+    private diaryService: DiaryService,
   ) {}
 
   // ─── SUBMIT EVIDENCE ──────────────────────────────
@@ -154,6 +156,21 @@ export class VerificationService {
         questId,
         confidence: analysis.confidence,
       });
+
+      // ─── AUTO-CREATE DIARY ENTRY ──────────────────
+      try {
+        await this.diaryService.createFromQuestCompletion(userId, questId, userQuest.id, {
+          questTitle: userQuest.quest.title,
+          category: userQuest.quest.category,
+          photoUrl: evidenceUrl || undefined,
+          location: location || undefined,
+          xpEarned: userQuest.quest.xpReward,
+          coinsEarned: userQuest.quest.coinsReward,
+        });
+        console.log(`[VerificationService] Diary entry auto-created for quest "${userQuest.quest.title}"`);
+      } catch (error) {
+        console.error(`[VerificationService] Diary auto-create error: ${error.message}`);
+      }
     } else if (analysis.status === 'rejected') {
       await this.trustService.recordEvent(userId, 'verification_rejected', {
         verificationId: verification.id,
@@ -161,6 +178,18 @@ export class VerificationService {
         confidence: analysis.confidence,
         reason: analysis.notes,
       });
+    }
+
+    // ─── FRAUD CHECK (Real-time alert to admins) ────
+    let fraudAlert: any = null;
+    try {
+      const alertResult = await this.trustService.checkAndAlert(userId);
+      if (alertResult.alerted) {
+        fraudAlert = alertResult.alert;
+        console.log(`[VerificationService] Fraud alert emitted for userId=${userId}`);
+      }
+    } catch (error) {
+      console.error(`[VerificationService] Fraud check error: ${error.message}`);
     }
 
     return {
@@ -175,6 +204,7 @@ export class VerificationService {
       },
       attempt: existingAttempts + 1,
       maxAttempts: MAX_ATTEMPTS,
+      fraudAlert,
       message: this.getStatusMessage(analysis.status, analysis.confidence),
     };
   }

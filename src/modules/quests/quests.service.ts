@@ -8,6 +8,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProgressionService } from '../progression/progression.service';
 import { AchievementsService } from '../achievements/achievements.service';
 import { StreaksService } from '../streaks/streaks.service';
+import { RankingNotificationService } from '../rankings/ranking-notification.service';
+import { CollectionService } from '../collection/collection.service';
 import { CreateQuestDto, QuestCategoryDto, QuestDifficultyDto } from './dto/create-quest.dto';
 import { ProposeQuestDto } from './dto/propose-quest.dto';
 import { QuestFiltersDto } from './dto/quest-filters.dto';
@@ -131,6 +133,8 @@ export class QuestsService {
     private streaksService: StreaksService,
     private progression: ProgressionService,
     private achievements: AchievementsService,
+    private rankingNotifications: RankingNotificationService,
+    private collection: CollectionService,
   ) {}
 
   // ─── SEED QUESTS ──────────────────────────────────
@@ -809,7 +813,7 @@ export class QuestsService {
 
     console.log(`[QuestsService] CompleteQuest: OK — "${quest.title}" +${finalXp}XP +${finalCoins} Coins (streak: ${streakDays}d, x${streakMultiplier}, level: ${progressionResult.level})`);
 
-    return {
+    const result: any = {
       userQuest: updated,
       rewards: {
         baseXp,
@@ -838,6 +842,31 @@ export class QuestsService {
       newBadges: badgeResult.newBadges.length > 0 ? badgeResult.newBadges : undefined,
       message: `🎉 Quest "${quest.title}" completed! +${finalXp} XP, +${finalCoins} 🪙${progressionResult.leveledUp ? ` 🎉 ¡Level ${progressionResult.level}!` : ''}${badgeResult.newBadges.length > 0 ? ` 🏆 ${badgeResult.newBadges.map((b: any) => b.icon + ' ' + b.name).join(', ')}` : ''}${streakMessage}`,
     };
+
+    // ─── RANKING NOTIFICATIONS (async, non-blocking) ──
+    try {
+      const rankNotifs = await this.rankingNotifications.checkAfterQuestCompletion(userId, questId);
+      if (rankNotifs.notifications.length > 0) {
+        console.log(`[QuestsService] Ranking notifications: ${rankNotifs.notifications.length} for userId=${userId}`);
+        result.rankingNotifications = rankNotifs.notifications;
+      }
+    } catch (error) {
+      console.error(`[QuestsService] Ranking notification error: ${error.message}`);
+    }
+
+    // ─── COLLECTION UNLOCKS (async, non-blocking) ──
+    try {
+      const collectResult = await this.collection.checkAndUnlock(userId, 'quest');
+      if (collectResult.newUnlocks.length > 0) {
+        console.log(`[QuestsService] Collectibles unlocked: ${collectResult.newUnlocks.length} for userId=${userId}`);
+        result.newCollectibles = collectResult.newUnlocks;
+        result.message += ` 🎒 ${collectResult.newUnlocks.map((c: any) => c.name).join(', ')}`;
+      }
+    } catch (error) {
+      console.error(`[QuestsService] Collection unlock error: ${error.message}`);
+    }
+
+    return result;
   }
 
   // ─── SKIP QUEST ───────────────────────────────────

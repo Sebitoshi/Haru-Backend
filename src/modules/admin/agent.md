@@ -22,7 +22,6 @@ src/modules/admin/
 ```
 
 ### Seguridad
-
 ```
 AdminGuard (@Admin())     ← Verifica role=admin|superadmin en JWT
 AdminThrottlerGuard       ← Admins tienen rate limit ilimitado
@@ -32,131 +31,171 @@ AdminThrottlerGuard       ← Admins tienen rate limit ilimitado
 
 ---
 
-## 📊 CAPACIDADES DEL ADMIN
+## 📊 CAPACIDADES DEL ADMIN (37 endpoints)
 
 ### 📊 Dashboard en tiempo real (WebSocket)
 - Namespace: `/admin`
 - Stats cada 30 segundos automáticamente
-- Eventos en vivo: `admin-action`, `admin-promoted`
-- Conexiones autenticadas con `authenticate`
+- Eventos en vivo: `admin-action`, `admin-promoted`, `fraud-alert`
 
-### 👤 Gestión de Usuarios
-| Acción | Descripción | 2FA |
-|--------|-------------|-----|
-| Listar | Paginación, búsqueda, filtro por rol | No |
-| Detalle | Stats completos, actividad, verificaciones | No |
-| Cambiar rol | user → admin → superadmin | ✅ Sí |
-| Eliminar | Soft-delete + revoke tokens (GDPR) | ✅ Sí |
+### 👤 Gestión de Usuarios (4)
+| Endpoint | Acción | 2FA |
+|----------|--------|-----|
+| `GET /admin/users` | Listar | No |
+| `GET /admin/users/:id` | Detalle completo | No |
+| `PATCH /admin/users/:id/role` | Cambiar rol | ✅ Sí |
+| `DELETE /admin/users/:id` | Eliminar (GDPR) | ✅ Sí |
 
-### 🎯 Gestión de Misiones
-| Acción | Descripción | 2FA |
-|--------|-------------|-----|
-| Listar | Todas con stats de uso | No |
-| Crear | Nueva misión manual | No |
-| Editar | Actualizar campos | No |
-| Toggle | Activar/desactivar | No |
-| Eliminar | Hard delete si sin datos, deactivate si con datos | No |
+### 🎯 Gestión de Misiones (5)
+| Endpoint | Acción | 2FA |
+|----------|--------|-----|
+| `GET /admin/quests` | Listar con stats | No |
+| `POST /admin/quests` | Crear nueva | No |
+| `PATCH /admin/quests/:id` | Editar | No |
+| `PATCH /admin/quests/:id/toggle` | Activar/desactivar | No |
+| `DELETE /admin/quests/:id` | Eliminar | No |
 
-### 📸 Gestión de Verificaciones
-| Acción | Descripción | 2FA |
-|--------|-------------|-----|
-| Listar todas | De TODOS los usuarios | No |
-| Batch review | Aprobar/rechazar hasta 50 de diferentes usuarios | No |
-| Batch analyze | Ver evidencia de múltiples usuarios | No |
+### 📸 Gestión de Verificaciones (3)
+| Endpoint | Acción | 2FA |
+|----------|--------|-----|
+| `GET /admin/verifications` | Listar todas | No |
+| `POST /admin/verifications/batch-review` | Batch review | No |
+| `POST /admin/verifications/batch-analyze` | Batch analyze | No |
 
-### 📈 Analytics
-- Períodos: 24h, 7d, 30d, 90d
-- Métricas: nuevos usuarios, misiones completadas, verificaciones, tasa de aprobación
-- Top 10 usuarios más activos
+### 🗂️ Gestión de Categorías (2)
+| Endpoint | Acción | 2FA |
+|----------|--------|-----|
+| `GET /admin/categories` | Listar con conteo de misiones | No |
+| `PATCH /admin/categories/:id` | Actualizar configuración | No |
 
-### 📋 Audit Log
-- Cada acción admin se registra en ActivityLog
-- Filtros: adminId, acción específica
-- Incluye: quién, qué, a quién, cuándo, detalles
+### 📝 Gestión de Reportes (3)
+| Endpoint | Acción | 2FA |
+|----------|--------|-----|
+| `GET /admin/reports` | Listar reportes (filtro por status) | No |
+| `GET /admin/reports/stats` | Estadísticas de reportes | No |
+| `PATCH /admin/reports/:id` | Revisar (reviewed/resolved/dismissed) | No |
+
+### 🏆 Gestión de Rankings (3)
+| Endpoint | Acción | 2FA |
+|----------|--------|-----|
+| `GET /admin/rankings/config` | Ver configuración | No |
+| `PATCH /admin/rankings/config` | Actualizar configuración | No |
+| `POST /admin/rankings/reset-weekly` | Reset manual semanal | No |
+
+### 🪙 Gestión de Recompensas (2)
+| Endpoint | Acción | 2FA |
+|----------|--------|-----|
+| `GET /admin/rewards/config` | Ver multiplicadores y bonos | No |
+| `PATCH /admin/rewards/config` | Actualizar multiplicadores | No |
+
+### 🛡️ Moderación de Contenido (4)
+| Endpoint | Acción | 2FA |
+|----------|--------|-----|
+| `GET /admin/moderation/diary` | Ver entradas de diario | No |
+| `PATCH /admin/moderation/diary/:id/hide` | Ocultar entrada | No |
+| `GET /admin/moderation/activity` | Ver actividad de usuarios | No |
+| `DELETE /admin/moderation/activity/:id` | Eliminar actividad | No |
+
+### 🔍 Fraud Dashboard (1)
+| Endpoint | Acción | 2FA |
+|----------|--------|-----|
+| `GET /admin/fraud/dashboard` | Dashboard de actividad sospechosa | No |
+
+### ⚙️ System Config (2)
+| Endpoint | Acción | 2FA |
+|----------|--------|-----|
+| `GET /admin/config` | Ver toda la config | No |
+| `PATCH /admin/config/:key` | Actualizar config | No |
+
+### 📈 Analytics (1)
+| Endpoint | Acción | 2FA |
+|----------|--------|-----|
+| `GET /admin/analytics` | Métricas por período | No |
+
+### 🏁 Otros (2)
+| Endpoint | Acción | 2FA |
+|----------|--------|-----|
+| `POST /admin/promote-first` | Primer admin (público) | No |
+| `GET /admin/audit-log` | Log de acciones admin | No |
 
 ---
 
-## 🔐 SISTEMA DE CONFIRMACIÓN (2FA)
-
-Acciones destructivas requieren un token temporal:
+## 🔍 FRAUD DASHBOARD
 
 ```
-Paso 1: Llamada sin confirmationToken
-→ Responde: { confirmationToken: "a1b2c3...", expiresIn: 60 }
+GET /admin/fraud/dashboard
 
-Paso 2: Llamada con confirmationToken
-→ Ejecuta la acción
+{
+  rejectedVerifications: [{ user, rejectedCount }],  // top 10
+  lowTrustUsers: [{ userId, username, score, fraudAttempts }],  // score < 30
+  fraudAlerts: [{ id, details, createdAt }],  // últimos 20
+  topReportedUsers: [{ user, reportCount }],  // top 10
+  summary: { totalRejected, totalLowTrust, totalFraudAlerts, totalReports }
+}
 ```
 
-Acciones que requieren 2FA:
-- `admin_role_change`
-- `admin_delete_user`
-- `admin_delete_quest`
-- `admin_promote_user`
-
-Tokens: 60 segundos de vida, un solo uso, almacenados en memoria.
-
 ---
 
-## 📡 WEBSOCKET EVENTS
+## 🪙 REWARDS CONFIG (default)
 
-| Evento | Dirección | Descripción |
-|--------|-----------|-------------|
-| `authenticate` | Client → Server | Autenticar admin |
-| `request-stats` | Client → Server | Pedir stats manualmente |
-| `dashboard-stats` | Server → Client | Stats cada 30s |
-| `admin-action` | Server → Client | Acción admin en tiempo real |
-| `admin-promoted` | Server → Client | Primer admin promovido |
-
----
-
-## 🌐 ENDPOINTS (15)
-
-| Endpoint | Método | 2FA | Descripción |
-|----------|--------|-----|-------------|
-| `POST /admin/promote-first` | 🌐 | No | Primer admin (solo si no hay) |
-| `GET /admin/dashboard` | 👑 | No | Dashboard completo |
-| `GET /admin/audit-log` | 👑 | No | Log de acciones admin |
-| `GET /admin/users` | 👑 | No | Listar usuarios |
-| `GET /admin/users/:id` | 👑 | No | Detalle usuario |
-| `PATCH /admin/users/:id/role` | 👑 | ✅ | Cambiar rol |
-| `DELETE /admin/users/:id` | 👑 | ✅ | Eliminar usuario |
-| `GET /admin/quests` | 👑 | No | Listar misiones |
-| `POST /admin/quests` | 👑 | No | Crear misión |
-| `PATCH /admin/quests/:id` | 👑 | No | Editar misión |
-| `PATCH /admin/quests/:id/toggle` | 👑 | No | Activar/desactivar |
-| `DELETE /admin/quests/:id` | 👑 | No | Eliminar misión |
-| `GET /admin/verifications` | 👑 | No | Verificaciones globales |
-| `POST /admin/verifications/batch-review` | 👑 | No | Batch review |
-| `POST /admin/verifications/batch-analyze` | 👑 | No | Batch analyze |
-| `GET /admin/analytics` | 👑 | No | Analytics |
-
----
-
-## 📊 MODELO DE DATOS
-
+```json
+{
+  "xpMultiplier": 1.0,
+  "coinsMultiplier": 1.0,
+  "streakBonusEnabled": true,
+  "streakBonusPerDay": 0.10,
+  "streakBonusMax": 0.50,
+  "levelUpBonusCoins": true,
+  "levelUpBonusFormula": "level * 10"
+}
 ```
-User
-├── role: UserRole (user | admin | superadmin)
 
-ActivityLog (audit trail)
-├── userId → admin
-├── action: admin_*
-├── details: { targetId, timestamp, ... }
+---
+
+## 🏆 RANKINGS CONFIG (default)
+
+```json
+{
+  "weeklyResetEnabled": true,
+  "resetDay": "monday",
+  "topPositionsRewarded": true,
+  "rewards": {
+    "1": { "xp": 500, "coins": 250 },
+    "2": { "xp": 300, "coins": 150 },
+    "3": { "xp": 200, "coins": 100 }
+  }
+}
+```
+
+---
+
+## 📝 MODELOS DE SOPORTE
+
+```prisma
+enum ReportStatus { pending, reviewed, resolved, dismissed }
+enum ReportReason { inappropriate_content, fraud, spam, harassment, fake_evidence, other }
+
+model Report {
+  reporterId, targetUserId?, targetEntryId?, targetVerificationId?
+  reason, description?, status, reviewedBy?, reviewNote?, resolvedAt?
+}
+
+model SystemConfig {
+  key (unique), value (Json), category, description?, updatedBy?
+}
 ```
 
 ---
 
 ## 🔑 REGLAS
 
-1. **Admin tiene endpoints SEPARADOS** de los endpoints de usuario.
-2. **Las acciones destructivas SIEMPRE requieren 2FA.**
-3. **El primer admin se promueve con promote-first** (no existe ruta para crear admin directamente).
-4. **Un superadmin puede eliminar a otros admins** pero no a sí mismo.
-5. **El audit log es inmutable** — no se puede borrar.
-6. **El WebSocket solo acepta conexiones autenticadas.**
-7. **Rate limit ilimitado para admins** — necesitan acceso completo.
-8. **Logging:** `[AdminService] Operation: details`
+1. **Todos los endpoints admin usan `/api/admin/`** — separados de la app normal.
+2. **2FA obligatorio** para acciones destructivas (delete, role change).
+3. **Rate limit ilimitado** para admins.
+4. **WebSocket real-time** para dashboard.
+5. **Audit log** — cada acción admin se registra.
+6. **Configuración persistida** en SystemConfig.
+7. **Logging:** `[AdminService] Operation: details`
 
 ---
 
@@ -164,4 +203,7 @@ ActivityLog (audit trail)
 
 | Fecha | Cambio | Responsable |
 |-------|--------|-------------|
-| 2026-08-27 | Implementación completa: CRUD, 2FA, WebSocket, audit log, email notifications | Buffy |
+| 2026-08-27 | Admin: CRUD misiones, usuarios, verificaciones, analytics | Buffy |
+| 2026-08-27 | Admin: 2FA, WebSocket, audit log, rate limit bypass | Buffy |
+| 2026-08-27 | Admin: Email notifications, promote-first | Buffy |
+| 2026-08-31 | Admin: +Categorías, Reportes, Rankings, Recompensas, Moderación, Fraud Dashboard | Buffy |

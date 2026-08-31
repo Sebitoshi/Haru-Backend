@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EconomyService } from '../economy/economy.service';
 
 // ═══════════════════════════════════════════════════════════
 // XP CURVE — Exponential growth
@@ -91,7 +92,10 @@ export const XP_SOURCES = {
 export class ProgressionService {
   private readonly logger = new Logger(ProgressionService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private economyService: EconomyService,
+  ) {}
 
   // ─── GET USER PROGRESSION ──────────────────────────
   async getProgression(userId: string) {
@@ -202,12 +206,16 @@ export class ProgressionService {
 
     const levelReward = leveledUp ? LEVEL_REWARDS[newLevel] : undefined;
 
-    // Grant level-up rewards
+    // Grant level-up rewards (via EconomyService for transaction logging)
     if (leveledUp && levelReward) {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { totalCoins: { increment: levelReward.coins } },
-      });
+      await this.economyService.earnCoins(
+        userId,
+        levelReward.coins,
+        'level_up',
+        `level_${newLevel}`,
+        `Level up: ${levelReward.title} (+${levelReward.coins} coins)`,
+        { oldLevel, newLevel, title: levelReward.title },
+      );
 
       this.logger.log(`Level up! ${oldLevel} → ${newLevel}. Reward: ${levelReward.title} (+${levelReward.coins} coins)`);
     }
@@ -221,53 +229,35 @@ export class ProgressionService {
     };
   }
 
-  // ─── ADD COINS ─────────────────────────────────────
+  // ─── ADD COINS (delegates to EconomyService) ──────
   async addCoins(userId: string, amount: number, source: string): Promise<{ coinsGained: number; totalCoins: number }> {
     this.logger.log(`AddCoins: userId=${userId}, +${amount} coins (${source})`);
 
-    const user = await this.prisma.user.update({
-      where: { id: userId },
-      data: { totalCoins: { increment: amount } },
-      select: { totalCoins: true },
-    });
+    // Map source to TransactionType
+    const txType = this.mapSourceToTxType(source);
+    const result = await this.economyService.earnCoins(userId, amount, txType, source, `+${amount} coins from ${source}`);
 
-    await this.prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'coins_gained',
-        details: { amount, source, newTotal: user.totalCoins },
-      },
-    });
-
-    return { coinsGained: amount, totalCoins: user.totalCoins };
+    return { coinsGained: result.earned, totalCoins: result.totalCoins };
   }
 
-  // ─── SPEND COINS ───────────────────────────────────
+  // ─── SPEND COINS (delegates to EconomyService) ────
   async spendCoins(userId: string, amount: number, source: string): Promise<{ spent: number; remaining: number }> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { totalCoins: true },
-    });
+    const txType = this.mapSourceToTxType(source);
+    const result = await this.economyService.spendCoins(userId, amount, txType, source, `-${amount} coins for ${source}`);
 
-    if (!user || user.totalCoins < amount) {
-      throw new Error(`Insufficient coins. Have: ${user?.totalCoins || 0}, need: ${amount}`);
-    }
+    return { spent: result.spent, remaining: result.remaining };
+  }
 
-    const updated = await this.prisma.user.update({
-      where: { id: userId },
-      data: { totalCoins: { decrement: amount } },
-      select: { totalCoins: true },
-    });
-
-    await this.prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'coins_spent',
-        details: { amount, source, newTotal: updated.totalCoins },
-      },
-    });
-
-    return { spent: amount, remaining: updated.totalCoins };
+  // ─── MAP SOURCE TO TRANSACTION TYPE ───────────────
+  private mapSourceToTxType(source: string): any {
+    if (source.includes('quest')) return 'quest_completed';
+    if (source.includes('badge')) return 'badge_unlocked';
+    if (source.includes('collectible')) return 'collectible_unlocked';
+    if (source.includes('level')) return 'level_up';
+    if (source.includes('streak')) return 'streak_milestone';
+    if (source.includes('daily')) return 'daily_bonus';
+    if (source.includes('admin')) return 'admin_grant';
+    return 'quest_completed';
   }
 
   // ─── GET XP LEADERBOARD ────────────────────────────

@@ -87,6 +87,19 @@ model User {
   streakProtections   Int            @default(0) // items that protect 1 day of lost streak
   trust               UserTrust?
   verifications       QuestVerification[]
+  diaryEntries        DiaryEntry[]
+  friendshipsAsRequester Friendship[]  @relation("FriendshipRequester")
+  friendshipsAsAddressee Friendship[]  @relation("FriendshipAddressee")
+  following            UserFollow[]   @relation("Following")
+  followedBy          UserFollow[]   @relation("FollowedBy")
+  activityFeed        FriendActivity[]
+  celebrations        Celebration[]
+  sentQuestChallenges QuestChallenge[] @relation("QuestChallengeSender")
+  receivedQuestChallenges QuestChallenge[] @relation("QuestChallengeReceiver")
+  collectibles     UserCollectible[]
+  transactions     Transaction[]
+  shopPurchases    UserShopPurchase[]
+  equippedItems    UserEquipped[]
 }
 
 model RefreshToken {
@@ -216,6 +229,7 @@ model Quest {
 
   userQuests UserQuest[]
   verifications QuestVerification[]
+  challenges QuestChallenge[]
 }
 
 model UserQuest {
@@ -301,6 +315,271 @@ model TrustEvent {
   @@index([createdAt])
 }
 
+// ─── DIARY MODEL ──────────────────────────────────
+
+enum DiaryMood {
+  amazing   // 🤩
+  happy     // 😊
+  calm      // 😌
+  tired     // 😴
+  reflective // 🤔
+}
+
+model DiaryEntry {
+  id            String    @id @default(uuid())
+  userId        String
+  questId       String?
+  userQuestId   String?
+  title         String
+  description   String?
+  photoUrl      String?   // Cloudinary URL from verification
+  location      Json?     // { lat, lng, name? }
+  mood          DiaryMood?
+  category      String?   // QuestCategory as string for flexibility
+  xpEarned      Int       @default(0)
+  coinsEarned   Int       @default(0)
+  tags          String[]  // custom tags
+  isFavorite    Boolean   @default(false)
+  isHidden      Boolean   @default(false) // soft delete
+  sharedAt      DateTime? // when shared publicly
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([createdAt])
+  @@index([isFavorite])
+  @@index([mood])
+}
+
+// ─── SOCIAL MODELS ────────────────────────────────
+
+enum FriendshipStatus {
+  pending
+  accepted
+  blocked
+}
+
+model Friendship {
+  id          String           @id @default(uuid())
+  requesterId String
+  addresseeId String
+  status      FriendshipStatus @default(pending)
+  createdAt   DateTime         @default(now())
+  acceptedAt  DateTime?
+
+  requester User @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+  @@index([requesterId])
+  @@index([addresseeId])
+  @@index([status])
+}
+
+model UserFollow {
+  id         String   @id @default(uuid())
+  followerId String
+  followeeId String
+  createdAt  DateTime @default(now())
+
+  follower User @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  followee User @relation("FollowedBy", fields: [followeeId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followeeId])
+  @@index([followerId])
+  @@index([followeeId])
+}
+
+enum ActivityVisibility {
+  public
+  friends
+  private
+}
+
+enum FriendActivityType {
+  quest_completed
+  level_up
+  streak_milestone
+  badge_unlocked
+  quest_shared
+  diary_shared
+  diary_favorited
+}
+
+model FriendActivity {
+  id          String              @id @default(uuid())
+  userId      String
+  type        FriendActivityType
+  details     Json?               // { questTitle, category, level, streakDays, badgeName, ... }
+  visibility  ActivityVisibility  @default(friends)
+  createdAt   DateTime            @default(now())
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  celebrations Celebration[]
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([visibility])
+}
+
+model Celebration {
+  id          String   @id @default(uuid())
+  activityId  String
+  userId      String   // who celebrated
+  type        String   // "clap" | "fire" | "heart" | "star"
+  createdAt   DateTime @default(now())
+
+  activity FriendActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, userId, type])
+  @@index([activityId])
+  @@index([userId])
+}
+
+model QuestChallenge {
+  id          String   @id @default(uuid())
+  senderId    String
+  receiverId  String
+  questId     String
+  message     String?
+  status      String   @default("pending") // pending | accepted | completed | declined
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+
+  sender   User @relation("QuestChallengeSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("QuestChallengeReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  quest    Quest @relation(fields: [questId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([status])
+}
+
+// ─── COLLECTION MODEL ─────────────────────────────
+
+enum CollectibleType {
+  badge     // 🏅 Insignias
+  plant     // 🌱 Plantas
+  object    // 🎒 Objetos
+  postcard  // 📮 Postales
+  special   // ⭐ Especiales
+}
+
+enum CollectibleRarity {
+  common      // Fácil de obtener
+  uncommon    // Requiere esfuerzo
+  rare        // Difícil
+  epic        // Muy difícil
+  legendary   // Extremadamente raro
+}
+
+enum CollectibleSource {
+  quest        // Al completar misión
+  achievement  // Al desbloquear logro
+  streak       // Por racha
+  level        // Por nivel
+  event        // Evento especial
+  purchase     // Comprado en tienda
+}
+
+model Collectible {
+  id          String              @id @default(uuid())
+  code        String              @unique
+  name        String
+  description String
+  type        CollectibleType
+  rarity      CollectibleRarity   @default(common)
+  imageUrl    String?             // illustration/icon URL
+  requirement Json                // { type: 'quests_completed', category?: 'nature', value: 5 }
+  xpReward    Int                 @default(0)
+  coinsReward Int                 @default(0)
+  isActive    Boolean             @default(true)
+  isLimited   Boolean             @default(false) // event-only
+  expiresAt   DateTime?           // for limited items
+  createdAt   DateTime            @default(now())
+
+  users UserCollectible[]
+
+  @@index([type])
+  @@index([rarity])
+  @@index([code])
+}
+
+model UserCollectible {
+  id            String   @id @default(uuid())
+  userId        String
+  collectibleId String
+  source        CollectibleSource @default(quest)
+  seen          Boolean  @default(false) // user has viewed it
+  unlockedAt    DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  collectible Collectible @relation(fields: [collectibleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, collectibleId])
+  @@index([userId])
+  @@index([collectibleId])
+  @@index([unlockedAt])
+}
+
+// ─── ADMIN MODELS ─────────────────────────────────
+
+enum ReportStatus {
+  pending
+  reviewed
+  resolved
+  dismissed
+}
+
+enum ReportReason {
+  inappropriate_content
+  fraud
+  spam
+  harassment
+  fake_evidence
+  other
+}
+
+model Report {
+  id          String       @id @default(uuid())
+  reporterId  String       // who reported
+  targetUserId String?     // user being reported
+  targetEntryId String?    // diary entry being reported
+  targetVerificationId String? // verification being reported
+  reason      ReportReason
+  description String?
+  status      ReportStatus @default(pending)
+  reviewedBy  String?      // admin who reviewed
+  reviewNote  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([status])
+  @@index([reporterId])
+  @@index([targetUserId])
+  @@index([createdAt])
+}
+
+model SystemConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  category  String   @default("general") // general, rewards, rate_limits, features
+  description String?
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@index([key])
+  @@index([category])
+}
+
 // ─── VERIFICATION MODEL ────────────────────────────
 
 enum VerificationStatus {
@@ -346,4 +625,128 @@ model QuestVerification {
   @@index([questId])
   @@index([userQuestId])
   @@index([status])
+}
+
+// ─── ECONOMY MODELS ───────────────────────────────
+
+enum TransactionType {
+  quest_completed
+  badge_unlocked
+  collectible_unlocked
+  level_up
+  streak_milestone
+  daily_bonus
+  admin_grant
+  refund
+  shop_purchase
+  streak_protection
+  gifting
+  admin_deduction
+  welcome_bonus
+}
+
+model Transaction {
+  id          String          @id @default(uuid())
+  userId      String
+  type        TransactionType
+  amount      Int             // positive = earn, negative = spend
+  balance     Int             // balance after this transaction
+  source      String          // quest_id, badge_code, item_code, etc.
+  description String?         // human-readable description
+  metadata    Json?           // extra details: { questTitle, itemName, ... }
+  createdAt   DateTime        @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([userId, createdAt])
+}
+
+enum ShopItemCategory {
+  protection   // 🛡️ Protección de racha
+  cosmetic     // 👕 Cosméticos
+  decoration   // 🏠 Decoraciones
+  special      // ⭐ Items especiales
+}
+
+enum ShopItemRarity {
+  common
+  uncommon
+  rare
+  epic
+  legendary
+}
+
+model ShopItem {
+  id          String           @id @default(uuid())
+  code        String           @unique
+  name        String
+  description String
+  category    ShopItemCategory
+  rarity      ShopItemRarity   @default(common)
+  price       Int              // coins cost
+  imageUrl    String?          // item illustration
+  effect      Json             // { type: 'streak_protection', value: 1 } or { type: 'cosmetic', key: 'theme', value: 'dark' }
+  isActive    Boolean          @default(true)
+  isLimited   Boolean          @default(false)
+  expiresAt   DateTime?
+  maxPerUser  Int?             // null = unlimited
+  createdAt   DateTime         @default(now())
+
+  purchases UserShopPurchase[]
+
+  @@index([category])
+  @@index([rarity])
+  @@index([code])
+}
+
+model UserShopPurchase {
+  id        String   @id @default(uuid())
+  userId    String
+  itemId    String
+  quantity  Int      @default(1)
+  totalCost Int      // price * quantity
+  equipped  Boolean  @default(false) //是否已装备
+  createdAt DateTime @default(now())
+
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item ShopItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([itemId])
+  @@index([createdAt])
+}
+
+// ─── CUSTOMIZATION MODELS ─────────────────────────
+
+enum EquipSlot {
+  body          // Cuerpo de Boti
+  color         // Color del cuerpo
+  clothing      // Ropa
+  head          // Sombreros / accesorios de cabeza
+  eyes          // Estilo de ojos
+  accessories   // Accesorios (lentes, Collares, etc.)
+  expression    // Expresión facial
+  effect        // Efectos visuales
+  theme         // Tema del perfil
+  title         // Título del perfil
+  frame         // Marco del avatar
+}
+
+model UserEquipped {
+  id        String    @id @default(uuid())
+  userId    String
+  slot      EquipSlot
+  itemId    String    // ShopItem.code
+  itemName  String    // cached name for display
+  itemImage String?   // cached imageUrl
+  equippedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, slot])
+  @@index([userId])
+  @@index([slot])
 }

@@ -291,4 +291,194 @@ export class AdminController {
   async getAnalytics(@Query('period') period?: string) {
     return this.adminService.getAnalytics({ period });
   }
+
+  // ═══════════════════════════════════════════════════
+  // 🗂️ CATEGORY MANAGEMENT
+  // ═══════════════════════════════════════════════════
+
+  @Admin()
+  @Get('categories')
+  @ApiOperation({ summary: '🗂️ Get all categories with quest counts' })
+  async getCategories() {
+    return this.adminService.getCategories();
+  }
+
+  @Admin()
+  @Patch('categories/:categoryId')
+  @ApiOperation({ summary: '🗂️ Update category settings' })
+  async updateCategory(
+    @Request() req: any,
+    @Param('categoryId') categoryId: string,
+    @Body() data: { name?: string; description?: string; isActive?: boolean },
+  ) {
+    return this.adminService.updateCategory(req.user.id, categoryId, data);
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 📝 REPORT MANAGEMENT
+  // ═══════════════════════════════════════════════════
+
+  @Admin()
+  @Get('reports')
+  @ApiOperation({ summary: '📝 Get content reports' })
+  @ApiQuery({ name: 'status', required: false, enum: ['pending', 'reviewed', 'resolved', 'dismissed'] })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  async getReports(
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.adminService.getReports(status, page ? parseInt(page) : 1, limit ? parseInt(limit) : 20);
+  }
+
+  @Admin()
+  @Get('reports/stats')
+  @ApiOperation({ summary: '📝 Get report statistics' })
+  async getReportStats() {
+    return this.adminService.getReportStats();
+  }
+
+  @Admin()
+  @Patch('reports/:reportId')
+  @ApiOperation({ summary: '📝 Review a report' })
+  @ApiBody({ schema: { properties: { status: { type: 'string', enum: ['reviewed', 'resolved', 'dismissed'] }, note: { type: 'string' } } } })
+  async reviewReport(
+    @Request() req: any,
+    @Param('reportId') reportId: string,
+    @Body('status') status: string,
+    @Body('note') note?: string,
+  ) {
+    return this.adminService.reviewReport(req.user.id, reportId, status, note);
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 🏆 RANKINGS MANAGEMENT
+  // ═══════════════════════════════════════════════════
+
+  @Admin()
+  @Get('rankings/config')
+  @ApiOperation({ summary: '🏆 Get rankings configuration' })
+  async getRankingsConfig() {
+    return this.adminService.getRankingsConfig();
+  }
+
+  @Admin()
+  @Patch('rankings/config')
+  @ApiOperation({ summary: '🏆 Update rankings configuration' })
+  async updateRankingsConfig(@Request() req: any, @Body() config: any) {
+    return this.adminService.updateRankingsConfig(req.user.id, config);
+  }
+
+  @Admin()
+  @Post('rankings/reset-weekly')
+  @ApiOperation({ summary: '🏆 Reset weekly rankings' })
+  async resetWeeklyRankings(@Request() req: any) {
+    return this.adminService.resetWeeklyRankings(req.user.id);
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 🪙 REWARDS CONFIGURATION
+  // ═══════════════════════════════════════════════════
+
+  @Admin()
+  @Get('rewards/config')
+  @ApiOperation({ summary: '🪙 Get rewards configuration (multipliers, bonuses)' })
+  async getRewardsConfig() {
+    return this.adminService.getRewardsConfig();
+  }
+
+  @Admin()
+  @Patch('rewards/config')
+  @ApiOperation({ summary: '🪙 Update rewards configuration' })
+  async updateRewardsConfig(@Request() req: any, @Body() config: any) {
+    return this.adminService.updateRewardsConfig(req.user.id, config);
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 🛡️ CONTENT MODERATION
+  // ═══════════════════════════════════════════════════
+
+  @Admin()
+  @Get('moderation/diary')
+  @ApiOperation({ summary: '🛡️ Get diary entries for moderation' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'userId', required: false })
+  async getDiaryForModeration(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('userId') userId?: string,
+  ) {
+    return this.adminService.getDiaryEntries(page ? parseInt(page) : 1, limit ? parseInt(limit) : 20, userId);
+  }
+
+  @Admin()
+  @Patch('moderation/diary/:entryId/hide')
+  @ApiOperation({ summary: '🛡️ Hide a diary entry' })
+  async hideDiaryEntry(
+    @Request() req: any,
+    @Param('entryId') entryId: string,
+    @Body('reason') reason: string,
+  ) {
+    return this.adminService.hideDiaryEntry(req.user.id, entryId, reason);
+  }
+
+  @Admin()
+  @Get('moderation/activity')
+  @ApiOperation({ summary: '🛡️ Get activity feed for moderation' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  async getActivityForModeration(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.adminService.getActivityFeed(page ? parseInt(page) : 1, limit ? parseInt(limit) : 20);
+  }
+
+  @Admin()
+  @Delete('moderation/activity/:activityId')
+  @ApiOperation({ summary: '🛡️ Remove an activity' })
+  async hideActivity(
+    @Request() req: any,
+    @Param('activityId') activityId: string,
+    @Body('reason') reason: string,
+  ) {
+    return this.adminService.hideActivity(req.user.id, activityId, reason);
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 🔍 FRAUD / SUSPICIOUS ACTIVITY DASHBOARD
+  // ═══════════════════════════════════════════════════
+
+  @Admin()
+  @Get('fraud/dashboard')
+  @ApiOperation({ summary: '🔍 Fraud and suspicious activity dashboard' })
+  async getFraudDashboard() {
+    return this.adminService.getFraudDashboard();
+  }
+
+  // ═══════════════════════════════════════════════════
+  // ⚙️ SYSTEM CONFIG
+  // ═══════════════════════════════════════════════════
+
+  @Admin()
+  @Get('config')
+  @ApiOperation({ summary: '⚙️ Get all system config' })
+  @ApiQuery({ name: 'category', required: false })
+  async getSystemConfig(@Query('category') category?: string) {
+    return this.adminService.getSystemConfig(category);
+  }
+
+  @Admin()
+  @Patch('config/:key')
+  @ApiOperation({ summary: '⚙️ Update system config' })
+  async updateSystemConfig(
+    @Request() req: any,
+    @Param('key') key: string,
+    @Body('value') value: any,
+    @Body('description') description?: string,
+  ) {
+    return this.adminService.updateSystemConfig(req.user.id, key, value, description);
+  }
 }

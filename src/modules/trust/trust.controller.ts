@@ -69,4 +69,15 @@ export class TrustController {
   async checkFraud(@Param('userId') userId: string) {
     return this.trustService.checkFraudPatterns(userId);
   }
+
+  @Admin()
+  @Post('admin/fraud/:userId/alert')
+  @ApiOperation({ summary: '🚨 Admin: manually trigger fraud alert for a user' })
+  @ApiBody({ schema: { type: 'object', properties: { patterns: { type: 'array', items: { type: 'string' } }, severity: { type: 'string', enum: ['warning', 'critical'] } }, required: ['patterns', 'severity'] } })
+  async triggerFraudAlert(
+    @Param('userId') userId: string,
+    @Body() body: { patterns: string[]; severity: 'warning' | 'critical' },
+  ) {
+    return this.trustService.emitFraudAlert(userId, body.patterns, body.severity);
+  }
 }

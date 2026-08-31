@@ -4,6 +4,8 @@ import { BotiController } from './boti.controller';
 import { BotiService } from './boti.service';
 import { BotiMemoryService } from './boti-memory.service';
 import { BotiMoodService } from './boti-mood.service';
+import { BotiAI } from './boti-ai.service';
+import { BotiProfileService } from './boti-profile.service';
 import {
   BotiMemory,
   BotiMemorySchema,
@@ -16,7 +18,13 @@ import {
     ]),
   ],
   controllers: [BotiController],
-  providers: [BotiService, BotiMemoryService, BotiMoodService],
-  exports: [BotiService, BotiMemoryService, BotiMoodService],
+  providers: [
+    BotiService,
+    BotiMemoryService,
+    BotiMoodService,
+    BotiAI,
+    BotiProfileService,
+  ],
+  exports: [BotiService, BotiMemoryService, BotiMoodService, BotiAI, BotiProfileService],
 })
 export class BotiModule {}

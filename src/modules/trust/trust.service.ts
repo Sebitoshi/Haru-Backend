@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AdminGateway } from '../admin/admin.gateway';
 import { TrustLevel } from '@prisma/client';
 
 // ═══════════════════════════════════════════════════════════
@@ -88,7 +89,10 @@ const REHABILITATION_BONUS = 15;  // Points restored after rehabilitation
 export class TrustService {
   private readonly logger = new Logger(TrustService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private gateway: AdminGateway,
+  ) {}
 
   // ─── GET USER TRUST PROFILE ───────────────────────
   async getTrustProfile(userId: string) {
@@ -421,6 +425,53 @@ export class TrustService {
         ? 'Se requiere revisión manual.'
         : 'Comportamiento normal.',
     };
+  }
+
+  // ─── FRAUD ALERTS (Real-time WebSocket) ──────────
+  async emitFraudAlert(userId: string, patterns: string[], severity: 'warning' | 'critical') {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, email: true, level: true },
+    });
+
+    const trust = await this.prisma.userTrust.findUnique({ where: { userId } });
+
+    const alert = {
+      type: 'fraud_alert',
+      severity,
+      timestamp: new Date().toISOString(),
+      user: user || { id: userId, username: 'Unknown' },
+      trust: trust ? {
+        score: trust.score,
+        level: trust.level,
+        fraudAttempts: trust.fraudAttempts,
+      } : null,
+      patterns,
+      message: severity === 'critical'
+        ? `🔴 FRAUDE CRÍTICO: ${user?.username || userId} — ${patterns.length} patrón(es) detectado(s)`
+        : `⚠️ Comportamiento sospechoso: ${user?.username || userId} — ${patterns.join(', ')}`,
+    };
+
+    // Push to all connected admins via WebSocket
+    this.gateway.pushEvent('fraud-alert', alert);
+
+    // Also log to activity
+    this.logger.warn(`🚨 FRAUD ALERT [${severity}]: ${user?.username || userId} — ${patterns.join(', ')}`);
+
+    return alert;
+  }
+
+  // ─── CHECK AND ALERT (called after verification) ──
+  async checkAndAlert(userId: string): Promise<{ alerted: boolean; alert?: any }> {
+    const result = await this.checkFraudPatterns(userId);
+
+    if (result.isSuspicious) {
+      const severity = result.patterns.length >= 3 ? 'critical' : 'warning';
+      const alert = await this.emitFraudAlert(userId, result.patterns, severity);
+      return { alerted: true, alert };
+    }
+
+    return { alerted: false };
   }
 
   // ─── ADMIN: PARDON ───────────────────────────────

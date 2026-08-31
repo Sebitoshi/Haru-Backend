@@ -30,7 +30,7 @@ src/
 ├── modules/
 │   ├── auth/              ← Autenticación (guards, strategies, dto)
 │   ├── users/             ← Perfil, badges, avatar, activity log
-│   ├── boti/              ← Compañero IA, expresiones, mood, memoria
+│   ├── boti/              ← Compañero IA: expresiones, mood, memoria, chat IA, 4 modos, recomendaciones
 │   ├── quests/            ← Motor de misiones
 │   ├── verification/      ← Sistema de verificación de evidencia
 │   ├── progression/       ← XP y niveles
@@ -81,18 +81,20 @@ src/
 | 2 | Autenticación (JWT, Google OAuth, Refresh Rotation) | ✅ Completado |
 | 3 | Users (perfil, badges, avatar Cloudinary, activity log, onboarding) | ✅ Completado |
 | 4 | Boti (personaje, expresiones, mood dinámico, memoria MongoDB) | ✅ Completado |
+| 7 | IA / Boti (chat IA, perfilamiento, 4 modos, recomendaciones) | ✅ Completado |
 | 5 | XP y Niveles (progression) | ✅ Completado |
 | 6 | Misiones (quests) | ✅ Completado |
 | 7 | Verificación de evidencia (verification) | ✅ Completado |
-| 8 | Economía (economy) | ⏳ Pendiente |
-| 9 | Tienda + Inventario (shop, inventory) | ⏳ Pendiente |
-| 10 | Personalización (customization) | ⏳ Pendiente |
+| 8 | Economía (economy) | ✅ Completado |
+| 9 | Tienda + Inventario (shop, inventory) | ✅ Completado |
+| 10 | Personalización (customization) | ✅ Completado |
 | 11 | Logros y Rachas (achievements, streaks) | ✅ Completado |
 | 12 | Sistema de confianza (trust) | ✅ Completado |
-| 13 | Diario de recuerdos (diary) | ⏳ Pendiente |
-| 14 | IA / Chat con Boti (ai) | ⏳ Pendiente |
-| 15 | Amigos y Rankings (friends, rankings) | ⏳ Pendiente |
-| 16 | Colección (collection) | ⏳ Pendiente |
+| 13 | Diario de recuerdos (diary) | ✅ Completado |
+| 14 | IA / Chat con Boti (ai) | ✅ Completado (en módulo boti/) |
+| 15 | Amigos (friends) | ✅ Completado |
+| 15b | Rankings | ✅ Completado |
+| 16 | Colección (collection) | ✅ Completado |
 | 17 | Notificaciones (notifications) | ⏳ Pendiente |
 | 18 | Panel de administración (admin) | ✅ Completado |
 | 19 | PWA y responsive | ⏳ Pendiente |

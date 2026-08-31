@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AdminController } from './admin.controller';
@@ -30,7 +30,7 @@ import { TrustModule } from '../trust/trust.module';
     EconomyModule,
     AchievementsModule,
     ShopModule,
-    TrustModule,
+    forwardRef(() => TrustModule),
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminGateway],
