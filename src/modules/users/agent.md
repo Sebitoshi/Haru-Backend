@@ -117,3 +117,4 @@ UsernameHistory
 | 2026-08-23 | Avatar Cloudinary, GDPR, Activity, Onboarding, Username History | Buffy |
 | 2026-08-23 | Sistema de Badges/etiquetas (15 badges) | Buffy |
 | 2026-08-25 | Renombrado a Haru | Buffy |
+| 2026-09-05 | Badges de racha arreglados: ahora leen el streak real del usuario (longestStreak) — antes nunca se otorgaban (TODO) | Buffy |

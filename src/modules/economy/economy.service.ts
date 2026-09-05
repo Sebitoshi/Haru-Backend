@@ -1,6 +1,7 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { TransactionType, ShopItemCategory, ShopItemRarity } from '@prisma/client';
+import { TransactionType, ShopItemCategory, ShopItemRarity, CollectibleRarity } from '@prisma/client';
+import { CollectionService } from '../collection/collection.service';
 
 // ═══════════════════════════════════════════════════════════
 // SHOP ITEMS CATALOG
@@ -193,10 +194,56 @@ function streakCoinBonus(baseCoins: number, streakDays: number): number {
 }
 
 @Injectable()
-export class EconomyService {
+export class EconomyService implements OnModuleInit {
   private readonly logger = new Logger(EconomyService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private collectionService: CollectionService,
+  ) {}
+
+  // ─── SEED SHOP ITEMS INTO DB ─────────────────────
+  // El catálogo vive hardcodeado arriba; la tabla ShopItem debe existir
+  // porque UserShopPurchase tiene FK → ShopItem.id.
+  async onModuleInit() {
+    await this.seedShopItems();
+  }
+
+  async seedShopItems(): Promise<{ created: number; existing: number }> {
+    let created = 0;
+    let existing = 0;
+
+    for (const item of SHOP_CATALOG) {
+      const exists = await this.prisma.shopItem.findUnique({ where: { code: item.code } });
+      if (exists) {
+        existing++;
+        continue;
+      }
+
+      await this.prisma.shopItem.create({
+        data: {
+          code: item.code,
+          name: item.name,
+          description: item.description,
+          category: item.category,
+          rarity: item.rarity,
+          price: item.price,
+          imageUrl: item.imageUrl || null,
+          effect: item.effect,
+          isActive: item.isActive ?? true,
+          isLimited: item.isLimited ?? false,
+          expiresAt: item.expiresAt || null,
+          maxPerUser: item.maxPerUser || null,
+        },
+      });
+      created++;
+    }
+
+    if (created > 0) {
+      this.logger.log(`SeedShopItems: ${created} created, ${existing} existing`);
+    }
+    return { created, existing };
+  }
 
   // ═══════════════════════════════════════════════════
   // EARN COINS
@@ -509,19 +556,19 @@ export class EconomyService {
 
     if (!user) throw new NotFoundException('User not found');
 
-    // Get purchase counts per item for this user
-    const purchases = await this.prisma.userShopPurchase.groupBy({
-      by: ['itemId'],
+    // Get purchase counts per item code for this user
+    const purchases = await this.prisma.userShopPurchase.findMany({
       where: { userId },
-      _sum: { quantity: true },
+      include: { item: { select: { code: true } } },
     });
 
     const purchaseMap: Record<string, number> = {};
     for (const p of purchases) {
-      purchaseMap[p.itemId] = p._sum.quantity || 0;
+      purchaseMap[p.item.code] = (purchaseMap[p.item.code] || 0) + p.quantity;
     }
 
-    let catalog = SHOP_CATALOG.filter((item) => item.isActive);
+    // isActive es opcional; si no está definido el item está activo por defecto
+    let catalog = SHOP_CATALOG.filter((item) => item.isActive !== false);
 
     // Filter limited items that expired
     const now = new Date();
@@ -577,7 +624,7 @@ export class EconomyService {
       throw new BadRequestException('Quantity must be between 1 and 10');
     }
 
-    const itemDef = SHOP_CATALOG.find((i) => i.code === itemCode && i.isActive);
+    const itemDef = SHOP_CATALOG.find((i) => i.code === itemCode && i.isActive !== false);
     if (!itemDef) {
       throw new NotFoundException(`Shop item not found: ${itemCode}`);
     }
@@ -610,11 +657,27 @@ export class EconomyService {
       { itemCode, itemName: itemDef.name, quantity, category: itemDef.category },
     );
 
-    // Record the purchase
+    // Record the purchase (FK → ShopItem.id, so look up the DB row by code)
+    let dbItem = await this.prisma.shopItem.findUnique({
+      where: { code: itemDef.code },
+      select: { id: true },
+    });
+    if (!dbItem) {
+      // Catálogo nuevo no sembrado aún — siémbralo sobre la marcha
+      await this.seedShopItems();
+      dbItem = await this.prisma.shopItem.findUnique({
+        where: { code: itemDef.code },
+        select: { id: true },
+      });
+      if (!dbItem) {
+        throw new NotFoundException(`Shop item row missing in DB: ${itemDef.code}`);
+      }
+    }
+
     await this.prisma.userShopPurchase.create({
       data: {
         userId,
-        itemId: itemDef.code,
+        itemId: dbItem.id,
         quantity,
         totalCost,
       },
@@ -749,8 +812,34 @@ export class EconomyService {
       }
 
       case 'mystery_collectible': {
-        // TODO: When collection module has random unlock, integrate here
-        this.logger.log(`Mystery box purchased for userId=${userId} — awaiting collection integration`);
+        // Unlock a random collectible of rarity >= minRarity (once per purchased box)
+        const minRarity = (effect.minRarity as CollectibleRarity) || 'common';
+        const result = await this.collectionService.unlockRandomCollectible(
+          userId,
+          minRarity,
+          'purchase',
+        );
+        if (result.unlocked && result.collectible) {
+          this.logger.log(
+            `Mystery box for userId=${userId} → ${result.collectible.name} (${result.collectible.rarity})`,
+          );
+          // Log the unlock so frontend/badges can track it
+          await this.prisma.activityLog.create({
+            data: {
+              userId,
+              action: 'mystery_box_unlocked',
+              details: {
+                itemName: itemDef.name,
+                collectible: result.collectible.code,
+                rarity: result.collectible.rarity,
+              },
+            },
+          });
+        } else {
+          this.logger.warn(
+            `Mystery box for userId=${userId} gave nothing: ${result.message}`,
+          );
+        }
         break;
       }
 

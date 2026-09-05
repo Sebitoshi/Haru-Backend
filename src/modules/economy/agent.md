@@ -168,6 +168,15 @@ userId, itemId, quantity, totalCost, createdAt
 
 ---
 
+## 📋 ACTUALIZACIONES
+
+| Fecha | Cambio | Responsable |
+|-------|--------|-------------|
+| 2026-09-05 | Caja Misteriosa integrada: compra desbloquea coleccionable aleatorio vía CollectionService (antes TODO, no entregaba nada) | Buffy |
+| 2026-09-05 | Fix tienda: `isActive` opcional ahora default activo (la tienda estaba vacía); catálogo se siembra en tabla ShopItem (FK de UserShopPurchase); agrupación de compras por code | Buffy |
+
+---
+
 ## 🎯 EARN SOURCES
 
 | Fuente | Amount | TransactionType |
@@ -225,6 +234,7 @@ userId, itemId, quantity, totalCost, createdAt
 ### CollectionService → EconomyService
 ```typescript
 // checkAndUnlock() → economyService.earnCoins(type: 'collectible_unlocked')
+// Caja Misteriosa: EconomyService.buyItem() → CollectionService.unlockRandomCollectible()
 ```
 
 ### AdminModule → EconomyService

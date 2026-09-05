@@ -64,7 +64,7 @@ src/
 | Capa | Tecnología |
 |------|------------|
 | Backend | NestJS + TypeScript |
-| Frontend | React + TypeScript + Tailwind CSS |
+| Frontend | Kotlin Multiplatform + Compose Multiplatform (Android + iOS) — ver `~/Escritorio/Haru./Haru/agent.md` |
 | DB relacional | PostgreSQL + Prisma 7 |
 | DB documentos | MongoDB + Mongoose |
 | IA | Servicio integrado vía NestJS |

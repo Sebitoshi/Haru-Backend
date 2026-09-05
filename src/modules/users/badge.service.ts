@@ -229,6 +229,12 @@ export class BadgeService {
     });
     const existingBadgeIds = new Set(existingBadges.map((b) => b.badgeId));
 
+    // Get user's streak (for streak badges)
+    const streak = await this.prisma.streak.findUnique({
+      where: { userId },
+      select: { currentStreak: true, longestStreak: true },
+    });
+
     // Get all badges
     const allBadges = await this.prisma.badge.findMany();
 
@@ -259,9 +265,9 @@ export class BadgeService {
           break;
 
         case 'streak':
-          // TODO: When streaks module is implemented, check actual streak
-          // For now, check activity consistency
-          earned = false;
+          // Badge requirement uses longestStreak (same semantic as collection):
+          // once reached, the streak badge stays earned even if the streak later breaks
+          earned = (streak?.longestStreak || 0) >= req.value;
           break;
 
         case 'count':
@@ -367,6 +373,12 @@ export class BadgeService {
     });
     const countMap = new Map(activityCounts.map((a) => [a.action, a._count.action]));
 
+    // Get user's streak (for streak badge progress)
+    const streak = await this.prisma.streak.findUnique({
+      where: { userId },
+      select: { currentStreak: true, longestStreak: true },
+    });
+
     return allBadges.map((badge) => {
       const earned = earnedCodes.has(badge.code);
       const req = badge.requirement as any;
@@ -381,6 +393,10 @@ export class BadgeService {
             break;
           case 'count':
             progress = Math.min(countMap.get(req.action) || 0, req.value);
+            target = req.value;
+            break;
+          case 'streak':
+            progress = Math.min(streak?.longestStreak || 0, req.value);
             target = req.value;
             break;
           case 'onboarding':

@@ -365,6 +365,77 @@ export class CollectionService {
     return { newUnlocks };
   }
 
+  // ─── UNLOCK RANDOM COLLECTIBLE (mystery box) ─────
+  async unlockRandomCollectible(
+    userId: string,
+    minRarity: CollectibleRarity = 'common',
+    source: CollectibleSource = 'purchase',
+  ): Promise<{
+    unlocked: boolean;
+    collectible?: { code: string; name: string; type: string; rarity: string };
+    message: string;
+  }> {
+    this.logger.log(`UnlockRandomCollectible: userId=${userId}, minRarity=${minRarity}`);
+
+    // Rarity ordering for the >= comparison
+    const rarityRank: Record<string, number> = {
+      common: 0,
+      uncommon: 1,
+      rare: 2,
+      epic: 3,
+      legendary: 4,
+    };
+    const minRank = rarityRank[minRarity] ?? 0;
+
+    // Collectibles the user already owns
+    const owned = await this.prisma.userCollectible.findMany({
+      where: { userId },
+      select: { collectibleId: true },
+    });
+    const ownedIds = new Set(owned.map((o) => o.collectibleId));
+
+    // Eligible: active, rarity >= minRarity, not owned
+    const all = await this.prisma.collectible.findMany({
+      where: { isActive: true },
+    });
+    const candidates = all.filter((c) => {
+      if (ownedIds.has(c.id)) return false;
+      return (rarityRank[c.rarity] ?? 0) >= minRank;
+    });
+
+    if (candidates.length === 0) {
+      this.logger.log(`UnlockRandomCollectible: no candidates left for userId=${userId}`);
+      return {
+        unlocked: false,
+        message: 'No hay coleccionables disponibles en esa rareza (ya los tienes todos).',
+      };
+    }
+
+    // Pick a random one
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+
+    await this.prisma.userCollectible.create({
+      data: {
+        userId,
+        collectibleId: pick.id,
+        source,
+      },
+    });
+
+    this.logger.log(`Collectible unlocked (random): ${pick.code} (${pick.rarity}) for userId=${userId}`);
+
+    return {
+      unlocked: true,
+      collectible: {
+        code: pick.code,
+        name: pick.name,
+        type: pick.type,
+        rarity: pick.rarity,
+      },
+      message: `🎁 ¡Conseguiste: ${pick.name} (${pick.rarity})!`,
+    };
+  }
+
   // ─── SEED COLLECTIBLES ───────────────────────────
   async seedCollectibles() {
     this.logger.log('Seeding collectibles...');

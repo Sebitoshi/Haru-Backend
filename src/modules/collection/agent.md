@@ -122,3 +122,4 @@ Se agrega a la respuesta de completeQuest
 | Fecha | Cambio | Responsable |
 |-------|--------|-------------|
 | 2026-08-30 | Collection: 35 items, 5 tipos, desbloqueo automático | Buffy |
+| 2026-09-05 | +`unlockRandomCollectible()` (caja misteriosa): desbloquea un coleccionable aleatorio no poseído con rarity ≥ minRarity | Buffy |
