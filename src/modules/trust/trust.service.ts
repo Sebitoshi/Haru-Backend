@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminGateway } from '../admin/admin.gateway';
-import { TrustLevel } from '@prisma/client';
+import { TrustLevel } from '../../generated/prisma/client';
 
 // ═══════════════════════════════════════════════════════════
 // TRUST LEVELS

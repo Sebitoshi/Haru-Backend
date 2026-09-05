@@ -13,7 +13,7 @@ import { CollectionService } from '../collection/collection.service';
 import { CreateQuestDto, QuestCategoryDto, QuestDifficultyDto } from './dto/create-quest.dto';
 import { ProposeQuestDto } from './dto/propose-quest.dto';
 import { QuestFiltersDto } from './dto/quest-filters.dto';
-import { Quest, QuestCategory, QuestDifficulty, UserQuestStatus } from '@prisma/client';
+import { Quest, QuestCategory, QuestDifficulty, UserQuestStatus } from '../../generated/prisma/client';
 
 // ─── REWARD TABLES ──────────────────────────────────
 const XP_BY_DIFFICULTY: Record<string, number> = {

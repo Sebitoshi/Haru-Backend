@@ -1,6 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { EquipSlot } from '@prisma/client';
+import { EquipSlot } from '../../generated/prisma/client';
 
 // ═══════════════════════════════════════════════════════════
 // DEFAULT BOTI APPEARANCE

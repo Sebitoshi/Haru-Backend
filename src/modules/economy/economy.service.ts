@@ -1,6 +1,6 @@
 import { Injectable, Logger, BadRequestException, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { TransactionType, ShopItemCategory, ShopItemRarity, CollectibleRarity } from '@prisma/client';
+import { TransactionType, ShopItemCategory, ShopItemRarity, CollectibleRarity } from '../../generated/prisma/client';
 import { CollectionService } from '../collection/collection.service';
 
 // ═══════════════════════════════════════════════════════════

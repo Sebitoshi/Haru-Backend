@@ -4,7 +4,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ShopService } from './shop.service';
-import { ShopItemCategory, ShopItemRarity } from '@prisma/client';
+import { ShopItemCategory, ShopItemRarity } from '../../generated/prisma/client';
 
 @ApiTags('🛍️ Shop')
 @ApiBearerAuth()

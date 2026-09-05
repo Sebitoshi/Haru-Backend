@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CollectibleType, CollectibleRarity, CollectibleSource, Prisma } from '@prisma/client';
+import { CollectibleType, CollectibleRarity, CollectibleSource, Prisma } from '../../generated/prisma/client';
 
 // ═══════════════════════════════════════════════════════════
 // COLLECTIBLE DEFINITIONS — Seed data

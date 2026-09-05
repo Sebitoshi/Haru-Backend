@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { EconomyService } from './economy.service';
-import { TransactionType, ShopItemCategory } from '@prisma/client';
+import { TransactionType, ShopItemCategory } from '../../generated/prisma/client';
 
 @ApiTags('🪙 Economy')
 @ApiBearerAuth()

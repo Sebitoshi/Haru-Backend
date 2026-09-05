@@ -10,7 +10,7 @@ import { GroqVisionService } from '../common/groq/groq-vision.service';
 import { GeofenceService } from '../common/geofence/geofence.service';
 import { TrustService } from '../trust/trust.service';
 import { DiaryService } from '../diary/diary.service';
-import { EvidenceType, VerificationStatus } from '@prisma/client';
+import { EvidenceType, VerificationStatus } from '../../generated/prisma/client';
 
 // ─── AI ANALYSIS MOCK ───────────────────────────────
 // In production, this calls a real AI model (OpenAI Vision, etc.)

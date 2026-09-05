@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EconomyService } from '../economy/economy.service';
-import { ShopItemCategory, ShopItemRarity } from '@prisma/client';
+import { ShopItemCategory, ShopItemRarity } from '../../generated/prisma/client';
 
 // ═══════════════════════════════════════════════════════════
 // EXTENDED SHOP CATALOG — Visual items for Boti customization
