@@ -12,7 +12,6 @@ import {
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
-import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
@@ -25,6 +24,13 @@ import {
 } from '@nestjs/swagger';
 import { VerificationService } from './verification.service';
 import { GroqVisionService, BatchAnalysisItem } from '../common/groq/groq-vision.service';
+
+type StreamResponse = {
+  setHeader(name: string, value: string): void;
+  flushHeaders(): void;
+  write(chunk: string): void;
+  end(): void;
+};
 
 @ApiTags('Verification')
 @ApiBearerAuth()
@@ -205,7 +211,7 @@ export class VerificationController {
   })
   async batchAnalyzeStream(
     @Req() req: any,
-    @Res() res: Response,
+    @Res() res: StreamResponse,
     @Body() body: { items: BatchAnalysisItem[] },
   ) {
     const items = (body.items || []).slice(0, 50);

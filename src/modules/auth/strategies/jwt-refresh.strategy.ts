@@ -2,8 +2,9 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
+
+type RefreshRequest = { headers?: { authorization?: string } };
 
 export interface JwtRefreshPayload {
   sub: string;
@@ -28,9 +29,9 @@ export class JwtRefreshStrategy extends PassportStrategy(
     });
   }
 
-  async validate(req: Request, payload: JwtRefreshPayload) {
+  async validate(req: RefreshRequest, payload: JwtRefreshPayload) {
     // Extract the raw token string from the Authorization header
-    const authHeader = req.headers.authorization;
+    const authHeader = (req as RefreshRequest).headers?.authorization;
     const rawToken = authHeader?.replace('Bearer ', '') || '';
 
     // Find the EXACT token in DB
