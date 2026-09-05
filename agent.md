@@ -48,7 +48,7 @@ src/
 │   ├── rankings/          ← Rankings
 │   ├── collection/        ← Colección de objetos
 │   ├── prisma/            ← PrismaService (global)
-│   └── common/            ← Cloudinary + MongoDB
+│   └── common/            ← Cloudinary + MongoDB + Email + Groq + Geofence
 ├── app.module.ts
 ├── app.controller.ts
 ├── app.service.ts

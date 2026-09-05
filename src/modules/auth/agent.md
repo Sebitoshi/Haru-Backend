@@ -86,3 +86,6 @@ Este módulo es **base** para todo Haru. Todos los demás módulos dependen de a
 | 2026-08-23 | Fase 1+2: Auth completo con PostgreSQL, JWT rotation, Google OAuth | Buffy |
 | 2026-08-25 | Renombrado a HARU | Buffy |
 | 2026-08-25 | Reestructurado a `src/modules/auth/` | Buffy |
+| 2026-09-03 | Emails reales de verificación y reset con Resend en `register`, `resend-verification` y `forgot-password` (antes solo console.log). Envs: `RESEND_API_KEY`, `EMAIL_FROM`, `FRONTEND_URL` | Buffy |
+| 2026-09-03 | Google login ahora vincula cuenta email+password existente y la marca `emailVerified=true` (Google ya verificó ese email) | Buffy |
+| 2026-09-03 | Verificación por **código OTP de 6 dígitos**: `POST /auth/verify-email-code` (campos `emailVerifyCode` + expiración 30 min en User). `register`/`resend-verification` generan y envían el código por email | Buffy |

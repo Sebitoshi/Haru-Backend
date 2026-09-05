@@ -102,3 +102,4 @@ QuestVerification
 |-------|--------|-------------|
 | 2026-08-26 | Verificación completa: 5 tipos, anti-fraud, 6 endpoints | Buffy |
 | 2026-08-26 | Groq Vision AI real (qwen/qwen3.6-27b, gratis) | Buffy |
+| 2026-09-03 | Fix arranque: import de TrustModule con `forwardRef` (dependencia circular con AdminModule) | Buffy |

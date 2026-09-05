@@ -9,10 +9,11 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { BotiService } from '../boti/boti.service';
+import { EmailService } from '../common/email/email.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomInt } from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -21,6 +22,7 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private botiService: BotiService,
+    private emailService: EmailService,
   ) {}
 
   // ─── REGISTER ───────────────────────────────────────
@@ -40,14 +42,16 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
-    const emailVerifyToken = randomBytes(32).toString('hex');
+    const emailVerifyCode = randomInt(100000, 1000000).toString();
+    const emailVerifyCodeExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 min
 
     const user = await this.prisma.user.create({
       data: {
         email: dto.email,
         username: dto.username,
         passwordHash,
-        emailVerifyToken,
+        emailVerifyCode,
+        emailVerifyCodeExpires,
       },
       select: {
         id: true,
@@ -58,8 +62,13 @@ export class AuthService {
       },
     });
 
-    // TODO: Send verification email in production
-    console.log(`📧 Email verification token for ${dto.email}: ${emailVerifyToken}`);
+    // Send verification code email (dry-run to console if RESEND_API_KEY is missing)
+    await this.emailService.sendVerificationEmail(
+      user.email,
+      user.username,
+      emailVerifyCode,
+    );
+    console.log(`[AuthService] Register: verification code for ${dto.email}: ${emailVerifyCode}`);
 
     // Auto-create BOTI for new user
     console.log(`[AuthService] Creating BOTI for new user ${user.username}`);
@@ -131,7 +140,13 @@ export class AuthService {
       if (!user.googleId) {
         user = await this.prisma.user.update({
           where: { id: user.id },
-          data: { googleId, avatarUrl: avatar || user.avatarUrl },
+          data: {
+            googleId,
+            avatarUrl: avatar || user.avatarUrl,
+            // Google already verified this email during authentication
+            emailVerified: true,
+            emailVerifyToken: null,
+          },
         });
       }
     } else {
@@ -259,7 +274,12 @@ export class AuthService {
       },
     });
 
-    // TODO: Send reset email in production
+    // Send reset email (dry-run to console if RESEND_API_KEY is missing)
+    await this.emailService.sendPasswordResetEmail(
+      user.email,
+      user.username,
+      resetToken,
+    );
     console.log(`🔑 Password reset token for ${email}: ${resetToken}`);
 
     return {
@@ -316,9 +336,43 @@ export class AuthService {
       data: {
         emailVerified: true,
         emailVerifyToken: null,
+        emailVerifyCode: null,
+        emailVerifyCodeExpires: null,
       },
     });
 
+    console.log(`[AuthService] VerifyEmail: userId=${user.id} verified via token link`);
+    return { message: 'Email verified successfully' };
+  }
+
+  // ─── VERIFY EMAIL WITH CODE (OTP) ─────────────────
+  async verifyEmailCode(email: string, code: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+
+    if (!user || user.emailVerified) {
+      throw new BadRequestException('Código inválido o expirado');
+    }
+
+    const isValid =
+      user.emailVerifyCode === code &&
+      user.emailVerifyCodeExpires &&
+      user.emailVerifyCodeExpires > new Date();
+
+    if (!isValid) {
+      throw new BadRequestException('Código inválido o expirado');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerified: true,
+        emailVerifyCode: null,
+        emailVerifyCodeExpires: null,
+        emailVerifyToken: null,
+      },
+    });
+
+    console.log(`[AuthService] VerifyEmailCode: userId=${user.id} verified via OTP`);
     return { message: 'Email verified successfully' };
   }
 
@@ -337,15 +391,21 @@ export class AuthService {
       return { message: 'Email already verified' };
     }
 
-    const emailVerifyToken = randomBytes(32).toString('hex');
+    const emailVerifyCode = randomInt(100000, 1000000).toString();
+    const emailVerifyCodeExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 min
 
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { emailVerifyToken },
+      data: { emailVerifyCode, emailVerifyCodeExpires },
     });
 
-    // TODO: Send verification email in production
-    console.log(`📧 New verification token for ${email}: ${emailVerifyToken}`);
+    // Send verification email (dry-run to console if RESEND_API_KEY is missing)
+    await this.emailService.sendVerificationEmail(
+      user.email,
+      user.username,
+      emailVerifyCode,
+    );
+    console.log(`[AuthService] ResendVerification: new code for ${email}: ${emailVerifyCode}`);
 
     return {
       message:

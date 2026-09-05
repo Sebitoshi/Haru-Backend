@@ -66,6 +66,8 @@ model User {
   onboardingCompleted Boolean        @default(false)
   emailVerified       Boolean        @default(false)
   emailVerifyToken    String?
+  emailVerifyCode     String?
+  emailVerifyCodeExpires DateTime?
   resetPasswordToken  String?
   resetPasswordExpires DateTime?
   level               Int            @default(1)

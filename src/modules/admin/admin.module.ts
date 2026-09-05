@@ -25,7 +25,7 @@ import { TrustModule } from '../trust/trust.module';
     }),
     UsersModule,
     QuestsModule,
-    VerificationModule,
+    forwardRef(() => VerificationModule),
     StreaksModule,
     EconomyModule,
     AchievementsModule,

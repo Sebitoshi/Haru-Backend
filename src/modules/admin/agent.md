@@ -207,3 +207,4 @@ model SystemConfig {
 | 2026-08-27 | Admin: 2FA, WebSocket, audit log, rate limit bypass | Buffy |
 | 2026-08-27 | Admin: Email notifications, promote-first | Buffy |
 | 2026-08-31 | Admin: +Categorías, Reportes, Rankings, Recompensas, Moderación, Fraud Dashboard | Buffy |
+| 2026-09-03 | Fix arranque: import de VerificationModule con `forwardRef` para romper dependencia circular Verification↔Trust↔Admin | Buffy |

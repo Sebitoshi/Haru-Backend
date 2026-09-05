@@ -22,6 +22,7 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { VerifyEmailCodeDto } from './dto/verify-email-code.dto';
 import { Public } from './guards/public.decorator';
 import { JwtRefreshAuthGuard } from './guards/jwt-refresh-auth.guard';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
@@ -221,6 +222,20 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Invalid verification token' })
   async verifyEmail(@Query('token') token: string) {
     return this.authService.verifyEmail(token);
+  }
+
+  // ─── VERIFY EMAIL WITH CODE (OTP) ─────────────────
+  @Public()
+  @Post('verify-email-code')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Verify email with 6-digit code (OTP)',
+    description: 'Verifica el correo usando el código numérico enviado por email.',
+  })
+  @ApiResponse({ status: 200, description: 'Email verified successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired code' })
+  async verifyEmailCode(@Body() dto: VerifyEmailCodeDto) {
+    return this.authService.verifyEmailCode(dto.email, dto.code);
   }
 
   // ─── RESEND VERIFICATION ──────────────────────────

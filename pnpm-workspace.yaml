@@ -1,0 +1,10 @@
+# pnpm 11: decisiones de scripts de build por paquete.
+# true = ejecutar el postinstall/build (necesarios: bcrypt y motores de Prisma).
+# false = no ejecutar (transitivos opcionales, no hacen falta para correr la app).
+allowBuilds:
+  bcrypt: true
+  '@prisma/engines': true
+  prisma: true
+  '@scarf/scarf': false
+  'better-sqlite3': false
+  'unrs-resolver': false
