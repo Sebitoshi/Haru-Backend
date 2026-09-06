@@ -128,9 +128,18 @@ export class InventoryService {
   async equipItem(userId: string, itemCode: string): Promise<{ equipped: boolean; slot: string; item: any }> {
     this.logger.log(`EquipItem: userId=${userId}, item=${itemCode}`);
 
+    // 0. Resolve ShopItem.id (UserShopPurchase.itemId guarda el id, no el code)
+    const shopItem = await this.prisma.shopItem.findUnique({
+      where: { code: itemCode },
+      select: { id: true },
+    });
+    if (!shopItem) {
+      throw new BadRequestException(`Shop item not found: ${itemCode}`);
+    }
+
     // 1. Check user owns this item
     const purchase = await this.prisma.userShopPurchase.findFirst({
-      where: { userId, itemId: itemCode },
+      where: { userId, itemId: shopItem.id },
       include: { item: { select: { code: true, name: true, imageUrl: true, effect: true } } },
     });
 
@@ -170,13 +179,13 @@ export class InventoryService {
 
     // 5. Mark as equipped in purchase
     await this.prisma.userShopPurchase.updateMany({
-      where: { userId, itemId: itemCode },
+      where: { userId, itemId: shopItem.id },
       data: { equipped: true },
     });
 
     // 6. Unequip previous item's purchase record
     const previousEquipped = await this.prisma.userShopPurchase.findFirst({
-      where: { userId, itemId: { not: itemCode }, equipped: true },
+      where: { userId, itemId: { not: shopItem.id }, equipped: true },
     });
     if (previousEquipped) {
       // Only unequip items in the same slot

@@ -64,7 +64,7 @@ const VISUAL_CATALOG: VisualShopItem[] = [
 
   // ─── ✨ EFFECTS ──────────────────────────────
   { code: 'effect_sparkle', name: 'Destellos', description: 'Partículas brillantes alrededor.', category: 'cosmetic', slot: 'effect', rarity: 'uncommon', price: 200, preview: { effect: 'sparkle' } },
-  { code: 'effect_fire', name: 'Fuego', description: 'Llamas小型as alrededor de Boti.', category: 'cosmetic', slot: 'effect', rarity: 'rare', price: 400, preview: { effect: 'fire' } },
+  { code: 'effect_fire', name: 'Fuego', description: 'Llamas pequeñas alrededor de Boti.', category: 'cosmetic', slot: 'effect', rarity: 'rare', price: 400, preview: { effect: 'fire' } },
   { code: 'effect_rain', name: 'Lluvia', description: 'Gotas de lluvia suaves.', category: 'cosmetic', slot: 'effect', rarity: 'uncommon', price: 180, preview: { effect: 'rain' } },
   { code: 'effect_petals', name: 'Pétalos', description: 'Pétalos de cerezo flotando.', category: 'cosmetic', slot: 'effect', rarity: 'rare', price: 350, preview: { effect: 'petals' }, isFeatured: true },
 
@@ -119,15 +119,16 @@ export class ShopService {
   }> {
     const { category, slot, rarity, search, sort = 'newest', page = 1, limit = 20 } = options;
 
-    // Get user's owned items
-    const owned = await this.prisma.userShopPurchase.groupBy({
-      by: ['itemId'],
+    // Get user's owned items (UserShopPurchase.itemId es el id de ShopItem,
+    // así que resolvemos a code para comparar con el catálogo visual).
+    const purchases = await this.prisma.userShopPurchase.findMany({
       where: { userId },
-      _sum: { quantity: true },
+      select: { quantity: true, item: { select: { code: true } } },
     });
     const ownedMap: Record<string, number> = {};
-    for (const o of owned) {
-      ownedMap[o.itemId] = o._sum.quantity || 0;
+    for (const p of purchases) {
+      const code = p.item.code;
+      ownedMap[code] = (ownedMap[code] || 0) + p.quantity;
     }
 
     const user = await this.prisma.user.findUnique({
@@ -223,7 +224,7 @@ export class ShopService {
     if (!item) throw new NotFoundException(`Item not found: ${itemCode}`);
 
     const owned = await this.prisma.userShopPurchase.aggregate({
-      where: { userId, itemId: itemCode },
+      where: { userId, item: { code: itemCode } },
       _sum: { quantity: true },
     });
 

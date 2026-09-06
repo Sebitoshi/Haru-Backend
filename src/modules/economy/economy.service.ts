@@ -36,7 +36,7 @@ const SHOP_CATALOG: ShopItemDef[] = [
   },
   {
     code: 'streak_protection_3',
-    name: '🛡️保护pack x3',
+    name: '🛡️ Pack Protección x3',
     description: 'Paquete de 3 protecciones de racha. Ahorra 50 coins.',
     category: 'protection',
     rarity: 'uncommon',
@@ -181,6 +181,64 @@ const SHOP_CATALOG: ShopItemDef[] = [
     effect: { type: 'mystery_collectible', minRarity: 'rare' },
     maxPerUser: 3,
   },
+
+  // ─── 🎨 COSMÉTICOS VISUALES (sync con el catálogo visual del módulo shop) ──
+  // Estos items alimentan la personalización de Boti (body/color/ojos/…).
+  // effect.type='cosmetic' + key=<EquipSlot> permite equiparlos desde /inventory.
+
+  // 👕 Cuerpo
+  { code: 'body_round', name: 'Boti Redondo', description: 'Forma redonda y amigable.', category: 'cosmetic', rarity: 'common', price: 100, effect: { type: 'cosmetic', key: 'body', value: 'round' } },
+  { code: 'body_square', name: 'Boti Cuadrado', description: 'Forma cuadrada y moderna.', category: 'cosmetic', rarity: 'common', price: 100, effect: { type: 'cosmetic', key: 'body', value: 'square' } },
+  { code: 'body_tall', name: 'Boti Alta', description: 'Forma alargada y elegante.', category: 'cosmetic', rarity: 'uncommon', price: 200, effect: { type: 'cosmetic', key: 'body', value: 'tall' } },
+  { code: 'body_mini', name: 'Boti Mini', description: 'Forma pequeña y adorable.', category: 'cosmetic', rarity: 'rare', price: 350, effect: { type: 'cosmetic', key: 'body', value: 'mini' } },
+
+  // 🎨 Color
+  { code: 'color_sakura', name: 'Sakura Pink', description: 'Rosa suave de cerezo.', category: 'cosmetic', rarity: 'common', price: 50, effect: { type: 'cosmetic', key: 'color', value: '#FFB7C5' } },
+  { code: 'color_ocean', name: 'Océano Blue', description: 'Azul profundo del mar.', category: 'cosmetic', rarity: 'common', price: 50, effect: { type: 'cosmetic', key: 'color', value: '#0077B6' } },
+  { code: 'color_forest', name: 'Forest Green', description: 'Verde bosque natural.', category: 'cosmetic', rarity: 'common', price: 50, effect: { type: 'cosmetic', key: 'color', value: '#2D6A4F' } },
+  { code: 'color_sunset', name: 'Sunset Orange', description: 'Naranja cálido de atardecer.', category: 'cosmetic', rarity: 'uncommon', price: 100, effect: { type: 'cosmetic', key: 'color', value: '#FF6B35' } },
+  { code: 'color_galaxy', name: 'Galaxy Purple', description: 'Púrpura cósmico brillante.', category: 'cosmetic', rarity: 'rare', price: 200, effect: { type: 'cosmetic', key: 'color', value: '#7B2D8E' } },
+  { code: 'color_golden', name: 'Golden Boti', description: 'Dorado reluciente y premium.', category: 'cosmetic', rarity: 'epic', price: 500, effect: { type: 'cosmetic', key: 'color', value: '#FFD700' } },
+  { code: 'color_rainbow', name: 'Rainbow Boti', description: 'Arcoíris animado y divertido.', category: 'cosmetic', rarity: 'legendary', price: 1000, effect: { type: 'cosmetic', key: 'color', value: 'rainbow' } },
+
+  // 👓 Ojos
+  { code: 'eyes_round', name: 'Ojos Redondos', description: 'Ojos grandes y expresivos.', category: 'cosmetic', rarity: 'common', price: 75, effect: { type: 'cosmetic', key: 'eyes', value: 'round' } },
+  { code: 'eyes_sleepy', name: 'Ojos Dormilones', description: 'Ojos relajados y chill.', category: 'cosmetic', rarity: 'uncommon', price: 150, effect: { type: 'cosmetic', key: 'eyes', value: 'sleepy' } },
+  { code: 'eyes_stars', name: 'Ojos de Estrella', description: 'Ojos con forma de estrella.', category: 'cosmetic', rarity: 'rare', price: 300, effect: { type: 'cosmetic', key: 'eyes', value: 'stars' } },
+  { code: 'eyes_heart', name: 'Ojos de Corazón', description: 'Ojos en forma de corazón.', category: 'cosmetic', rarity: 'epic', price: 400, effect: { type: 'cosmetic', key: 'eyes', value: 'heart' } },
+
+  // 😊 Expresiones
+  { code: 'expr_happy', name: 'Feliz', description: 'Sonrisa amplia y alegre.', category: 'cosmetic', rarity: 'common', price: 50, effect: { type: 'cosmetic', key: 'expression', value: 'happy' } },
+  { code: 'expr_wink', name: 'Guiño', description: 'Un ojo cerrado, muy cool.', category: 'cosmetic', rarity: 'uncommon', price: 100, effect: { type: 'cosmetic', key: 'expression', value: 'wink' } },
+  { code: 'expr_excited', name: 'Emocionado', description: 'Boca abierta de sorpresa.', category: 'cosmetic', rarity: 'uncommon', price: 120, effect: { type: 'cosmetic', key: 'expression', value: 'excited' } },
+  { code: 'expr_cool', name: 'Cool', description: 'Sonrisa confiada con lentes.', category: 'cosmetic', rarity: 'rare', price: 250, effect: { type: 'cosmetic', key: 'expression', value: 'cool' } },
+  { code: 'expr_party', name: 'Fiesta', description: 'Expresión de celebración.', category: 'cosmetic', rarity: 'epic', price: 400, effect: { type: 'cosmetic', key: 'expression', value: 'party' } },
+
+  // 🧢 Cabeza
+  { code: 'head_cap', name: 'Gorra', description: 'Gorra deportiva casual.', category: 'cosmetic', rarity: 'common', price: 100, effect: { type: 'cosmetic', key: 'head', value: 'cap' } },
+  { code: 'head_crown', name: 'Corona', description: 'Corona dorada de rey/reina.', category: 'cosmetic', rarity: 'epic', price: 600, effect: { type: 'cosmetic', key: 'head', value: 'crown' } },
+  { code: 'head_flower', name: 'Flor', description: 'Flor fresca en la cabeza.', category: 'cosmetic', rarity: 'uncommon', price: 150, effect: { type: 'cosmetic', key: 'head', value: 'flower' } },
+  { code: 'head_antenna', name: 'Antena', description: 'Antena de robot divertida.', category: 'cosmetic', rarity: 'rare', price: 300, effect: { type: 'cosmetic', key: 'head', value: 'antenna' } },
+
+  // 👓 Accesorios
+  { code: 'acc_glasses', name: 'Lentes', description: 'Lentes intelectuales.', category: 'cosmetic', rarity: 'common', price: 100, effect: { type: 'cosmetic', key: 'accessories', value: 'glasses' } },
+  { code: 'acc_scarf', name: 'Bufanda', description: 'Bufanda cálida de invierno.', category: 'cosmetic', rarity: 'uncommon', price: 200, effect: { type: 'cosmetic', key: 'accessories', value: 'scarf' } },
+  { code: 'acc_wings', name: 'Alitas', description: 'Alitas angelicales brillantes.', category: 'cosmetic', rarity: 'legendary', price: 1500, effect: { type: 'cosmetic', key: 'accessories', value: 'wings' } },
+
+  // ✨ Efectos
+  { code: 'effect_sparkle', name: 'Destellos', description: 'Partículas brillantes alrededor.', category: 'cosmetic', rarity: 'uncommon', price: 200, effect: { type: 'cosmetic', key: 'effect', value: 'sparkle' } },
+  { code: 'effect_fire', name: 'Fuego', description: 'Llamas pequeñas alrededor de Boti.', category: 'cosmetic', rarity: 'rare', price: 400, effect: { type: 'cosmetic', key: 'effect', value: 'fire' } },
+  { code: 'effect_rain', name: 'Lluvia', description: 'Gotas de lluvia suaves.', category: 'cosmetic', rarity: 'uncommon', price: 180, effect: { type: 'cosmetic', key: 'effect', value: 'rain' } },
+  { code: 'effect_petals', name: 'Pétalos', description: 'Pétalos de cerezo flotando.', category: 'cosmetic', rarity: 'rare', price: 350, effect: { type: 'cosmetic', key: 'effect', value: 'petals' } },
+
+  // 🏠 Tema Sakura (el catálogo visual usa 'theme_sakura'; antes solo existía theme_cherry)
+  { code: 'theme_sakura', name: '🌸 Tema Sakura', description: 'Tema japonés con flores de cerezo y rosa suave.', category: 'cosmetic', rarity: 'rare', price: 400, effect: { type: 'theme', key: 'sakura', value: 'sakura' } },
+
+  // 🖼️ Marco Neón
+  { code: 'frame_neon', name: '🖼️ Marco Neón', description: 'Marco brillante de neón.', category: 'decoration', rarity: 'epic', price: 700, effect: { type: 'avatar_frame', key: 'neon', value: 'neon' } },
+
+  // 🏷️ Título Pionero
+  { code: 'title_pioneer', name: '🌱 Título: Pionero', description: 'Título "Pionero de Haru" — solo primeros 100 usuarios.', category: 'decoration', rarity: 'legendary', price: 2000, effect: { type: 'profile_title', key: 'pioneer', value: '🌱 Pionero de Haru' } },
 ];
 
 // ═══════════════════════════════════════════════════════════
@@ -766,6 +824,24 @@ export class EconomyService implements OnModuleInit {
         this.logger.log(`Applied streak protection: +${protections} for userId=${userId}`);
         break;
       }
+
+      case 'cosmetic':
+        // Visual item (cuerpo, color, ojos, expresión, cabeza, accesorios, efecto).
+        // El equipar se maneja en /inventory/equip/:code; aquí solo registramos.
+        await this.prisma.activityLog.create({
+          data: {
+            userId,
+            action: 'cosmetic_equipped',
+            details: {
+              type: effect.type,
+              key: effect.key,
+              value: effect.value,
+              itemName: itemDef.name,
+            },
+          },
+        });
+        this.logger.log(`Applied cosmetic: ${itemDef.code} (${effect.key}=${effect.value}) for userId=${userId}`);
+        break;
 
       case 'theme':
       case 'boti_expression':
