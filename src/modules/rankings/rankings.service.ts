@@ -313,18 +313,7 @@ export class RankingsService {
     limit: number,
   ): Promise<RankingResponse> {
     // Get friend IDs
-    const friendships = await this.prisma.friendship.findMany({
-      where: {
-        status: 'completed' as any,
-        OR: [{ requesterId: userId }, { addresseeId: userId }],
-      },
-    });
-
-    const friendIds = friendships.map((f) =>
-      f.requesterId === userId ? f.addresseeId : f.requesterId,
-    );
-
-    // Also check for 'accepted' status
+    // Get friend IDs (only accepted friendships)
     const acceptedFriendships = await this.prisma.friendship.findMany({
       where: {
         status: 'accepted',
