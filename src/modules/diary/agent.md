@@ -1,37 +1,46 @@
 # 📖 Diary (Diario de Recuerdos) — Agent Rules
 
 > **Antes de trabajar aquí, LEER este archivo.**
+> **Ruta:** `src/modules/diary/`
 
 ---
 
 ## 📌 PROPÓSITO
 
-Cada misión importante completada en **Haru** se convierte en un **recuerdo** dentro del diario personal del usuario.
-
-Con el tiempo, Haru construye una **historia personal** de experiencias.
+Cada misión importante completada en **Haru** se convierte en un **recuerdo** dentro del diario personal. Con el tiempo, Haru construye una **historia personal** de experiencias.
 
 ---
 
-## 🔄 FLUJO
+## 🏗️ ARQUITECTURA
 
 ```
-Misión verificada exitosamente (status: verified)
+diary/
+├── diary.service.ts              # CRUD, auto-create, timeline, map, calendar, stats, search
+├── diary.controller.ts           # 15 endpoints bajo /api/diary/
+├── diary.module.ts               # Module
+└── agent.md
+```
+
+---
+
+## 🔄 FLUJO DE AUTO-CREACIÓN
+
+```
+Misión verificada exitosamente (VerificationService)
        ↓
 DiaryService.createFromQuestCompletion() se ejecuta automáticamente
        ↓
-Se crea DiaryEntry con:
+Crea DiaryEntry con:
   - Foto de verificación → foto del recuerdo
   - Título auto-generado: "🌿 Nombre de la misión"
   - Categoría, XP, Coins de la misión
+  - Location GPS (si disponible)
        ↓
-El usuario puede editar:
-  - título, descripción/reflexión
-  - estado de ánimo
-  - marcar como favorito
-  - agregar tags
-       ↓
-El diario se construye con el tiempo
+El usuario puede editar después
 ```
+
+### Duplicate prevention
+No se crea doble entrada para la misma `userQuestId`.
 
 ---
 
@@ -45,23 +54,18 @@ El diario se construye con el tiempo
 | location | JSON? | { lat, lng, name? } |
 | mood | Enum? | amazing 🤩, happy 😊, calm 😌, tired 😴, reflective 🤔 |
 | category | String? | Categoría de la misión |
-| xpEarned | Int | XP ganada en la misión |
-| coinsEarned | Int | Coins ganadas en la misión |
+| xpEarned | Int | XP ganada |
+| coinsEarned | Int | Coins ganadas |
 | tags | String[] | Tags custom del usuario |
 | isFavorite | Boolean | Marcado como favorito |
+| isHidden | Boolean | Soft delete |
 
 ---
 
-## 📊 MODELO DE DATOS (Prisma)
+## 📊 MODELO DE DATOS
 
 ```prisma
-enum DiaryMood {
-  amazing    // 🤩
-  happy      // 😊
-  calm       // 😌
-  tired      // 😴
-  reflective // 🤔
-}
+enum DiaryMood { amazing, happy, calm, tired, reflective }
 
 model DiaryEntry {
   id, userId, questId?, userQuestId?
@@ -75,59 +79,55 @@ model DiaryEntry {
 
 ---
 
-## ✅ ENDPOINTS (11)
+## 🌐 ENDPOINTS (15)
 
+### CRUD
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
-| `/api/diary/entries` | POST | Crear entrada manual |
-| `/api/diary/entries` | GET | Listar entradas (con filtros) |
-| `/api/diary/entries/:id` | GET | Ver entrada por ID |
-| `/api/diary/entries/:id` | PATCH | Editar entrada |
-| `/api/diary/entries/:id/favorite` | PATCH | Toggle favorito |
-| `/api/diary/entries/:id` | DELETE | Ocultar entrada (soft delete) |
-| `/api/diary/favorites` | GET | Ver favoritos |
-| `/api/diary/category/:category` | GET | Por categoría |
-| `/api/diary/calendar/:year/:month` | GET | Vista calendario |
-| `/api/diary/stats` | GET | Estadísticas del diario |
-| `/api/diary/search?q=` | GET | Buscar entradas |
-| `/api/diary/timeline` | GET | Timeline estilo Instagram (cursor pagination) |
-| `/api/diary/timeline/stats` | GET | Stats del timeline (streaks, heatmap, más activo) |
-| `/api/diary/map` | GET | Vista de mapa con clustering automático |
-| `/api/diary/map/cluster` | GET | Expandir cluster a entries individuales |
+| `POST /api/diary/entries` | 🔒 | Crear entrada manual |
+| `GET /api/diary/entries` | 🔒 | Listar entradas (filtros: category, mood, isFavorite, startDate, endDate, search, page, limit) |
+| `GET /api/diary/entries/:id` | 🔒 | Ver entrada por ID |
+| `PATCH /api/diary/entries/:id` | 🔒 | Editar entrada |
+| `PATCH /api/diary/entries/:id/favorite` | 🔒 | Toggle favorito |
+| `DELETE /api/diary/entries/:id` | 🔒 | Ocultar entrada (soft delete) |
+
+### Vistas
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `GET /api/diary/favorites` | 🔒 | Ver favoritos |
+| `GET /api/diary/category/:category` | 🔒 | Por categoría |
+| `GET /api/diary/calendar/:year/:month` | 🔒 | Vista calendario |
+| `GET /api/diary/stats` | 🔒 | Estadísticas del diario |
+| `GET /api/diary/search?q=` | 🔒 | Buscar entradas |
+| `GET /api/diary/timeline` | 🔒 | Timeline estilo Instagram (cursor pagination agrupado por mes) |
+| `GET /api/diary/timeline/stats` | 🔒 | Stats del timeline (streaks, heatmap, más activo) |
+| `GET /api/diary/map` | 🔒 | Vista de mapa con clustering automático |
+| `GET /api/diary/map/cluster` | 🔒 | Expandir cluster a entries individuales |
 
 ---
 
 ## 📱 TIMELINE (Instagram-style)
 
 Cursor-based pagination agrupado por mes:
-
-```
-GET /api/diary/timeline?limit=10
-→ sections: [
-    {
-      key: "2026-08",
-      label: "agosto de 2026",
-      entries: [...],
-      count: 5,
-      totalXp: 125
-    }
-  ],
-  nextCursor: "entry-id-abc",
-  hasMore: true
+```json
+{
+  "sections": [{
+    "key": "2026-08",
+    "label": "agosto de 2026",
+    "entries": [...],
+    "count": 5,
+    "totalXp": 125
+  }],
+  "nextCursor": "entry-id-abc",
+  "hasMore": true
+}
 ```
 
-Para cargar más:
-```
-GET /api/diary/timeline?cursor=entry-id-abc&limit=10
-```
-
-Cada entry incluye: `dayOfWeek`, `dayOfMonth`, `timeFormatted`.
+Para cargar más: `GET /api/diary/timeline?cursor=entry-id-abc&limit=10`
 
 ---
 
-## 🗺️ MAPA (con clustering)
-
-El mapa usa **clustering grid-based O(n)** que agrupa markers cercanos según el zoom:
+## 🗺️ MAPA (clustering grid-based O(n))
 
 | Zoom | Cluster radius | Equivalente |
 |------|---------------|-------------|
@@ -138,70 +138,19 @@ El mapa usa **clustering grid-based O(n)** que agrupa markers cercanos según el
 | 13-15 | 300 m | Vista barrio |
 | 16+ | 0 (sin cluster) | Vista edificio |
 
-```
-GET /api/diary/map?zoom=7
-→ items: [
-    {
-      type: "cluster",
-      id: "cluster-4.7100:-74.0700",
-      count: 5,
-      center: { lat: 4.71, lng: -74.07 },
-      thumbnailPhoto: "https://...",
-      primaryCategory: "nature",
-      primaryCategoryEmoji: "🌿",
-      categoryDistribution: [{ category: "nature", count: 3 }, ...],
-      totalXp: 125,
-      dateRange: { from: "2026-08-01", to: "2026-08-15" },
-      entryIds: ["id1", "id2", "id3", "id4", "id5"]
-    },
-    {
-      type: "marker",
-      id: "abc",
-      title: "📸 Captura el Momento",
-      location: { lat: 4.65, lng: -74.10 }
-    }
-  ],
-  stats: {
-    totalMarkers: 12,
-    clusterCount: 2,
-    singleCount: 5,
-    clusterRadiusKm: 5
-  }
-```
-
-Para expandir un cluster:
-```
-GET /api/diary/map/cluster?ids=id1,id2,id3,id4,id5
-→ entries: [...], count: 5
-```
-
 ---
 
 ## 🔥 TIMELINE STATS
 
+```json
+{
+  "currentStreakDays": 5,
+  "longestStreakDays": 12,
+  "mostActiveDay": { "name": "Sábado", "entries": 8, "percentage": 22 },
+  "monthlyActivity": [{ "month": "2026-08", "count": 15, "xp": 375 }],
+  "heatmap": { "2026-08-01": 2, "2026-08-03": 1 }
+}
 ```
-GET /api/diary/timeline/stats
-→ currentStreakDays: 5,
-  longestStreakDays: 12,
-  mostActiveDay: { name: "Sábado", entries: 8, percentage: 22 },
-  monthlyActivity: [{ month: "2026-08", count: 15, xp: 375 }],
-  heatmap: { "2026-08-01": 2, "2026-08-03": 1, ... }
-```
-
----
-
-## 🔍 FILTROS DISPONIBLES
-
-| Filtro | Tipo | Ejemplo |
-|--------|------|---------|
-| category | string | `?category=nature` |
-| mood | string | `?mood=happy` |
-| isFavorite | boolean | `?isFavorite=true` |
-| startDate | ISO date | `?startDate=2026-08-01` |
-| endDate | ISO date | `?endDate=2026-08-31` |
-| search | string | `?search=fotografía` |
-| page | number | `?page=2` |
-| limit | number | `?limit=10` |
 
 ---
 
@@ -223,3 +172,6 @@ GET /api/diary/timeline/stats
 | Fecha | Cambio | Responsable |
 |-------|--------|-------------|
 | 2026-08-30 | Diary: CRUD, filtros, calendario, stats, auto-create desde verificación | Buffy |
+| 2026-09-05 | +Timeline (Instagram-style cursor pagination) + Timeline Stats (heatmap, streaks) | Buffy |
+| 2026-09-05 | +Map view (clustering grid-based O(n)) + Cluster expand | Buffy |
+| 2026-09-05 | +Search + Category view + Favorites view | Buffy |

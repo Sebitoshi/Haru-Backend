@@ -14,24 +14,23 @@ Panel de administración de **Haru**. Acceso completo a todas las funcionalidade
 ## 🏗️ ARQUITECTURA
 
 ```
-src/modules/admin/
-├── admin.module.ts          ← Módulo con JwtModule + Gateway
-├── admin.service.ts         ← Toda la lógica de negocio admin
-├── admin.controller.ts      ← Endpoints bajo /api/admin/
-└── admin.gateway.ts         ← WebSocket para dashboard en tiempo real
+admin/
+├── admin.service.ts              # Toda la lógica de negocio admin (CRUD, stats, config)
+├── admin.controller.ts           # 37 endpoints bajo /api/admin/
+├── admin.gateway.ts              # WebSocket: dashboard real-time, fraud alerts, admin events
+├── admin.module.ts               # Module (JwtModule + Gateway)
+└── agent.md
 ```
 
 ### Seguridad
-```
-AdminGuard (@Admin())     ← Verifica role=admin|superadmin en JWT
-AdminThrottlerGuard       ← Admins tienen rate limit ilimitado
-@Public()                 ← Solo para promote-first (cuando no hay admins)
-2FA Confirmation          ← Acciones destructivas requieren token de confirmación
-```
+- **AdminGuard** (`@Admin()`) — Verifica role=admin|superadmin en JWT
+- **AdminThrottlerGuard** — Admins tienen rate limit ilimitado
+- **@Public()** — Solo para `promote-first` (cuando no hay admins)
+- **2FA Confirmation** — Acciones destructivas requieren token de confirmación
 
 ---
 
-## 📊 CAPACIDADES DEL ADMIN (37 endpoints)
+## ✅ ENDPOINTS (37)
 
 ### 📊 Dashboard en tiempo real (WebSocket)
 - Namespace: `/admin`
@@ -41,7 +40,7 @@ AdminThrottlerGuard       ← Admins tienen rate limit ilimitado
 ### 👤 Gestión de Usuarios (4)
 | Endpoint | Acción | 2FA |
 |----------|--------|-----|
-| `GET /admin/users` | Listar | No |
+| `GET /admin/users` | Listar (paginado, search) | No |
 | `GET /admin/users/:id` | Detalle completo | No |
 | `PATCH /admin/users/:id/role` | Cambiar rol | ✅ Sí |
 | `DELETE /admin/users/:id` | Eliminar (GDPR) | ✅ Sí |
@@ -115,22 +114,20 @@ AdminThrottlerGuard       ← Admins tienen rate limit ilimitado
 ### 🏁 Otros (2)
 | Endpoint | Acción | 2FA |
 |----------|--------|-----|
-| `POST /admin/promote-first` | Primer admin (público) | No |
+| `POST /admin/promote-first` | Primer admin (público, @Public) | No |
 | `GET /admin/audit-log` | Log de acciones admin | No |
 
 ---
 
 ## 🔍 FRAUD DASHBOARD
 
-```
-GET /admin/fraud/dashboard
-
+```json
 {
-  rejectedVerifications: [{ user, rejectedCount }],  // top 10
-  lowTrustUsers: [{ userId, username, score, fraudAttempts }],  // score < 30
-  fraudAlerts: [{ id, details, createdAt }],  // últimos 20
-  topReportedUsers: [{ user, reportCount }],  // top 10
-  summary: { totalRejected, totalLowTrust, totalFraudAlerts, totalReports }
+  "rejectedVerifications": [{ "user", "rejectedCount" }],
+  "lowTrustUsers": [{ "userId", "username", "score", "fraudAttempts" }],
+  "fraudAlerts": [{ "id", "details", "createdAt" }],
+  "topReportedUsers": [{ "user", "reportCount" }],
+  "summary": { "totalRejected", "totalLowTrust", "totalFraudAlerts", "totalReports" }
 }
 ```
 
@@ -192,7 +189,7 @@ model SystemConfig {
 1. **Todos los endpoints admin usan `/api/admin/`** — separados de la app normal.
 2. **2FA obligatorio** para acciones destructivas (delete, role change).
 3. **Rate limit ilimitado** para admins.
-4. **WebSocket real-time** para dashboard.
+4. **WebSocket real-time** para dashboard y fraud alerts.
 5. **Audit log** — cada acción admin se registra.
 6. **Configuración persistida** en SystemConfig.
 7. **Logging:** `[AdminService] Operation: details`
@@ -207,4 +204,4 @@ model SystemConfig {
 | 2026-08-27 | Admin: 2FA, WebSocket, audit log, rate limit bypass | Buffy |
 | 2026-08-27 | Admin: Email notifications, promote-first | Buffy |
 | 2026-08-31 | Admin: +Categorías, Reportes, Rankings, Recompensas, Moderación, Fraud Dashboard | Buffy |
-| 2026-09-03 | Fix arranque: import de VerificationModule con `forwardRef` para romper dependencia circular Verification↔Trust↔Admin | Buffy |
+| 2026-09-03 | Fix arranque: import de VerificationModule con `forwardRef` para romper dependencia circular | Buffy |

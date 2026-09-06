@@ -1,153 +1,129 @@
 # 🛡️ Trust (Sistema de Confianza) — Agent Rules
 
 > **Antes de trabajar aquí, LEER este archivo.**
+> **Ruta:** `src/modules/trust/`
 
 ---
 
 ## 📌 PROPÓSITO
 
-Mantener rankings limpios y recompensas justas en **Haru** analizando el comportamiento del usuario.
+Mantener rankings limpios y recompensas justas en **Haru** analizando el comportamiento del usuario. Score 0-100 con 4 niveles. Cooldown post-fraude. Rehabilitación.
 
 ---
 
-## 🚨 ALERTAS DE FRAUDE EN TIEMPO REAL
-
-**Cuando se detecta un patrón sospechoso, el admin recibe una notificación inmediata vía WebSocket.**
+## 🏗️ ARQUITECTURA
 
 ```
-Usuario envía evidencia
-       ↓
-Verificación procesada
-       ↓
-checkAndAlert(userId)
-       ↓
-¿Patrón sospechoso?
-├── No → Continuar normalmente
-└── Sí →
-    ↓
-┌─── Determinar Severidad ───────────────────────────┐
-│ warning: 1-2 patrones detectados                   │
-│ critical: 3+ patrones detectados                   │
-└───────────────────────────────────────────────────┘
-       ↓
-┌─── Enviar Alerta WebSocket ────────────────────────┐
-│ Evento: 'fraud-alert'                              │
-│ Datos: { user, trust, patterns, severity }         │
-│ Destinatarios: Todos los admins conectados         │
-└───────────────────────────────────────────────────┘
-       ↓
-┌─── Registrar en ActivityLog ───────────────────────┐
-│ type: fraud_alert                                  │
-│ details: { userId, patterns, severity }            │
-└───────────────────────────────────────────────────┘
+trust/
+├── trust.service.ts              # Score, levels, fraud detection, cooldown, rehabilitation, alerts
+├── trust.controller.ts           # 9 endpoints (3 user + 6 admin)
+├── trust.module.ts               # Module (imports AdminModule via forwardRef)
+└── agent.md
 ```
-
-### Evento WebSocket: `fraud-alert`
-
-```json
-{
-  "type": "fraud-alert",
-  "severity": "warning | critical",
-  "timestamp": "2026-08-27T18:00:00Z",
-  "user": {
-    "id": "uuid",
-    "username": "carlos",
-    "email": "carlos@test.com",
-    "level": 3
-  },
-  "trust": {
-    "score": 35,
-    "level": "trustworthy",
-    "fraudAttempts": 2
-  },
-  "patterns": [
-    "3 rechazos en las últimas 24h",
-    "Evidencia duplicada detectada"
-  ],
-  "message": "⚠️ Comportamiento sospechoso: carlos — 2 patrón(es) detectado(s)"
-}
-```
-
-### Severidad
-
-| Severidad | Criterio | Acción |
-|-----------|----------|--------|
-| ⚠️ `warning` | 1-2 patrones | Alerta visual + log |
-| 🔴 `critical` | 3+ patrones | Alerta sonora + log + requiere revisión inmediata |
 
 ---
 
-## 📊 FACTORES DE CONFIANZA
+## 📊 4 NIVELES DE CONFIANZA
 
-| Factor | Impacto | Descripción |
-|--------|---------|-------------|
-| Evidencias aceptadas | ✅ +5 | Misiones verificadas exitosamente |
-| Evidencias rechazadas | ⚠️ -3 | Intentos de evidencia inválida |
-| Reportes recibidos | ❌ -10 | Otros usuarios lo reportaron |
-| Intentos de fraude | 🔴 -25 | Patrones sospechosos detectados |
-| Misión completada | ✅ +2 | Bonus por completar misiones |
-| Hito de racha | ✅ +3 | Alcanzar milestone de streak |
-| Badge desbloqueado | ✅ +1 | Badge nuevo |
-| Advertencia admin | ⚠️ -5 | Advertencia administrativa |
-| Perdón admin | ✅ +10 | Admin perdonó incidente |
-| Rehabilitación | ✅ +15 | Restauración tras buen comportamiento |
+| Nivel | Emoji | Score min | Requisito extra | Beneficios |
+|-------|-------|-----------|-----------------|------------|
+| new_user | 👤 | 0 | — | Acceso básico |
+| trustworthy | 🌱 | 30 | ≥5 quests completadas | Rankings, 5 evidencias/día |
+| very_trustworthy | 🌿 | 60 | ≥20 quests completadas | Ranking destacado, evidencias prioritarias, 10/día |
+| excellent | ⭐ | 80 | ≥50 quests completadas | Top ranking, verificación instantánea, ilimitado, badge exclusivo |
+
+---
+
+## 📊 SCORE IMPACTS
+
+| Evento | Impacto |
+|--------|---------|
+| verification_accepted | +5 |
+| verification_rejected | -3 |
+| verification_needs_review | -1 |
+| report_received | -10 |
+| fraud_detected | -25 |
+| quest_completed | +2 |
+| streak_milestone | +3 |
+| badge_unlocked | +1 |
+| account_warning | -5 |
+| admin_pardon | +10 |
+| rehabilitation | +15 |
 
 ---
 
 ## ⏳ COOLDOWN (7 días)
 
-Después de un fraude detectado:
+Después de fraude detectado:
 - ❌ Puntos POSITIVOS no se aplican
 - ✅ Puntos NEGATIVOS siguen aplicándose
-- ⏳ Duración: 7 días
+- Duración: 7 días desde `fraud_detected`
+- Se extiende si hay otro fraude
 
 ---
 
 ## 🔄 REHABILITACIÓN (+15 puntos)
 
 Condiciones:
-1. Tener fraude registrado
+1. Tener fraude registrado (`lastFraudAt`)
 2. Estar en nivel 🌿 Muy Confiable
 3. Mantener ese nivel 30+ días
 4. No haber sido rehabilitado antes
 
+```
+POST /trust/me/rehabilitate
+       ↓
+¿Ya rehabilitado? → No
+¿Sin fraude? → No
+¿Nivel != very_trustworthy? → No
+¿Días en nivel >= 30? → No
+       ↓
++15 puntos → limpia cooldown → registra evento
+```
+
 ---
 
-## 🏷️ NIVELES DE CONFIANZA
-
-| Nivel | Emoji | Score | Beneficios |
-|-------|-------|-------|------------|
-| Nuevo | 👤 | 0 | Acceso básico |
-| Confiable | 🌱 | 30 | Rankings, 5 evidencias/día |
-| Muy Confiable | 🌿 | 60 | Ranking destacado, 10 evidencias/día |
-| Excelente | ⭐ | 80 | Top ranking, verificación instantánea |
-
----
-
-## 🕵️ DETECCIÓN DE FRAUDE
+## 🚨 DETECCIÓN DE FRAUDE
 
 | Patrón | Umbral | Severidad |
 |--------|--------|-----------|
-| Rechazos en 24h | 3+ | ⚠️ warning |
-| Rechazos en 7 días | 5+ | 🔴 critical |
-| Evidencia duplicada | Misma URL 2 veces | 🔴 critical |
-| Envíos rápidos | 5+ en 1 hora | ⚠️ warning |
+| Rechazos en 24h | ≥3 | ⚠️ warning |
+| Rechazos en 7 días | ≥5 | 🔴 critical |
+| Evidencia duplicada | Misma URL 2+ veces | 🔴 critical |
+| Envíos rápidos | ≥5 en 1 hora | ⚠️ warning |
+
+### Alertas WebSocket en tiempo real
+```
+checkAndAlert(userId) → checkFraudPatterns()
+       ↓
+¿Patrón sospechoso?
+├── No → Continuar
+└── Sí →
+    severity = patterns.length >= 3 ? 'critical' : 'warning'
+    emitFraudAlert() → AdminGateway.pushEvent('fraud-alert', alert)
+    → Todos los admins conectados reciben la alerta
+```
 
 ---
 
-## 🌐 ENDPOINTS
+## 🌐 ENDPOINTS (9)
 
-| Endpoint | Método | Auth | Descripción |
-|----------|--------|------|-------------|
-| `GET /trust/me` | 🔒 | Usuario | Mi perfil completo |
-| `GET /trust/leaderboard` | 🔒 | Usuario | Ranking de confianza |
-| `POST /trust/me/rehabilitate` | 🔒 | Usuario | Intentar rehabilitación |
-| `GET /trust/admin/stats` | 👑 | Admin | Estadísticas + cooldowns + rehabilitaciones |
-| `GET /trust/admin/user/:id` | 👑 | Admin | Ver confianza de usuario |
-| `POST /trust/admin/user/:id/pardon` | 👑 | Admin | Perdonar usuario |
-| `POST /trust/admin/user/:id/warn` | 👑 | Admin | Advertir usuario |
-| `GET /trust/admin/fraud/:id` | 👑 | Admin | Verificar patrones de fraude |
-| `POST /trust/admin/fraud/:id/alert` | 👑 | Admin | Enviar alerta manual |
+### User (3)
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `GET /trust/me` | 🔒 | Mi perfil: level, score, cooldown, rehabilitation, recent events |
+| `GET /trust/leaderboard` | 🔒 | Ranking de confianza |
+| `POST /trust/me/rehabilitate` | 🔒 | Intentar rehabilitación |
+
+### Admin (6) — @Admin()
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `GET /trust/admin/stats` | 👑 | Stats: distribution, cooldowns, rehabilitations, suspicious users |
+| `GET /trust/admin/user/:userId` | 👑 | Ver confianza de cualquier usuario |
+| `POST /trust/admin/user/:userId/pardon` | 👑 | Perdonar (+10 puntos) |
+| `POST /trust/admin/user/:userId/warn` | 👑 | Advertir (-5 puntos) |
+| `GET /trust/admin/fraud/:userId` | 👑 | Verificar patrones de fraude |
+| `POST /trust/admin/fraud/:userId/alert` | 👑 | Enviar alerta manual |
 
 ---
 
@@ -155,12 +131,14 @@ Condiciones:
 
 ```prisma
 model UserTrust {
-  score, level, cooldownUntil, lastFraudAt
-  rehabilitatedAt, scoreBeforeFraud
+  userId (unique), score (Int), level (TrustLevel enum)
+  cooldownUntil?, lastFraudAt?, scoreBeforeFraud?
+  rehabilitatedAt?, lastEvaluatedAt?
+  totalAccepted, totalRejected, totalReports, fraudAttempts
 }
 
 model TrustEvent {
-  type, impact, details (JSON)
+  id, userId, type, impact (Int), details (JSON), createdAt
 }
 ```
 
@@ -172,8 +150,8 @@ model TrustEvent {
 2. **El cooldown bloquea puntos positivos**, no negativos.
 3. **La rehabilitación es un derecho, no un castigo.**
 4. **Las alertas de fraude se envían en tiempo real** a todos los admins conectados.
-5. **Logging:** `[TrustService] Operation: details`
-6. **"No es punitivo, es preventivo."**
+5. **"No es punitivo, es preventivo."**
+6. **Logging:** `[TrustService] Operation: details`
 
 ---
 
@@ -184,3 +162,4 @@ model TrustEvent {
 | 2026-08-27 | Implementación completa: score, niveles, fraude, admin tools | Buffy |
 | 2026-08-27 | +Cooldown 7 días, +Rehabilitación +15 puntos | Buffy |
 | 2026-08-27 | +Alertas de fraude en tiempo real (WebSocket) | Buffy |
+| 2026-09-03 | Fix arranque: import con `forwardRef` para romper dependencia circular Verification↔Trust↔Admin | Buffy |

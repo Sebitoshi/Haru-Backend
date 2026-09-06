@@ -28,30 +28,31 @@ Haru te hace **salir de la app para vivir**: Entrás → descubrís misión → 
 ```text
 src/
 ├── modules/
-│   ├── auth/              ← Autenticación (guards, strategies, dto)
-│   ├── users/             ← Perfil, badges, avatar, activity log
-│   ├── boti/              ← Compañero IA: expresiones, mood, memoria, chat IA, 4 modos, recomendaciones
-│   ├── quests/            ← Motor de misiones
-│   ├── verification/      ← Sistema de verificación de evidencia
-│   ├── progression/       ← XP y niveles
-│   ├── economy/           ← Coins y transacciones
-│   ├── shop/              ← Tienda cosmética
-│   ├── inventory/         ← Objetos del usuario
-│   ├── customization/     ← Personalización visual de Boti
-│   ├── achievements/      ← Logros
-│   ├── streaks/           ← Rachas diarias
-│   ├── ai/                ← Integración IA con Boti
-│   ├── notifications/     ← Notificaciones
-│   ├── trust/             ← Sistema de confianza/reputación
-│   ├── diary/             ← Diario de recuerdos
-│   ├── friends/           ← Sistema social
-│   ├── rankings/          ← Rankings
-│   ├── collection/        ← Colección de objetos
+│   ├── auth/              ← Autenticación (13 endpoints: register, login, Google, JWT rotation, OTP, reset)
+│   ├── users/             ← Perfil, badges (15), avatar, activity log, onboarding, GDPR (16 endpoints)
+│   ├── boti/              ← Compañero IA: 9 expresiones, mood dinámico, memoria MongoDB, chat Groq, 4 modos, recommendations (17 endpoints)
+│   ├── quests/            ← Motor de misiones: 26 semillas, weekly, streak multiplier, multi-step, AI propose, level unlock (16 endpoints)
+│   ├── verification/      ← Verificación de evidencia: Groq Vision, Whisper, Geofence, batch SSE, fraud alerts (8 endpoints)
+│   ├── progression/       ← XP (exponential), niveles (max 50), leaderboard (3 endpoints)
+│   ├── economy/           ← Coins: earn/spend transaccional, 50+ shop items, mystery box, admin grant (7 endpoints)
+│   ├── shop/              ← Tienda visual: 50+ items, 11 slots, filters, featured (4 endpoints)
+│   ├── inventory/         ← Equipar/desequipar, loadout, Boti preview (4 endpoints)
+│   ├── customization/     ← Apariencia Boti, 5 presets, preview, save/reset (7 endpoints)
+│   ├── achievements/      ← 30 badges + 10 ranking badges, auto-detección, seed (4 endpoints)
+│   ├── streaks/           ← Rachas: tracking, protection (200 coins), milestones (8), history (6 endpoints)
+│   ├── ai/                ← Módulo contenedor — IA real en boti/ y common/groq/
+│   ├── notifications/     ← Pendiente de implementación completa
+│   ├── trust/             ← Sistema de confianza: score 0-100, 4 niveles, cooldown, rehabilitación, fraud alerts WebSocket (9 endpoints)
+│   ├── diary/             ← Diario: auto-create, timeline Instagram, mapa clustering, calendar, stats, search (15 endpoints)
+│   ├── friends/           ← Social: amistad, follow, feed, celebraciones, comparaciones, retos, share (22 endpoints)
+│   ├── rankings/          ← Rankings: global, friends, streak, xp, missions, category, weekly, notifications (11 endpoints)
+│   ├── collection/        ← 35 coleccionables: plants, badges, objects, postcards, specials, mystery box (7 endpoints)
 │   ├── prisma/            ← PrismaService (global)
-│   └── common/            ← Cloudinary + MongoDB + Email + Groq + Geofence
+│   └── common/            ← Cloudinary + MongoDB + Email (SMTP/Resend/dry-run) + Groq Vision + Geofence
 ├── app.module.ts
 ├── app.controller.ts
 ├── app.service.ts
+├── bootstrap.ts
 └── main.ts
 ```
 
@@ -63,12 +64,17 @@ src/
 
 | Capa | Tecnología |
 |------|------------|
-| Backend | NestJS + TypeScript |
-| Frontend | Kotlin Multiplatform + Compose Multiplatform (Android + iOS) — ver `~/Escritorio/Haru./Haru/agent.md` |
+| Backend | NestJS 11 + TypeScript 5.7 |
+| Frontend | Kotlin Multiplatform + Compose Multiplatform (Android + iOS) |
 | DB relacional | PostgreSQL + Prisma 7 |
-| DB documentos | MongoDB + Mongoose |
-| IA | Servicio integrado vía NestJS |
+| DB documentos | MongoDB + Mongoose 9 |
+| IA Chat | Groq llama-3.3-70b-versatile |
+| IA Vision | Groq qwen/qwen3.6-27b (multimodal, gratis) |
+| IA Audio | Groq Whisper (transcripción) |
+| Geofence | API de geolocalización con POIs |
 | Archivos | Cloudinary |
+| Email | SMTP (nodemailer) / Resend / dry-run |
+| WebSockets | Socket.io (admin dashboard, fraud alerts) |
 | Despliegue | Vercel (optimización máxima) |
 
 ---
@@ -78,26 +84,51 @@ src/
 | Fase | Módulo | Estado |
 |------|--------|--------|
 | 1 | Arquitectura base (NestJS, Prisma, PostgreSQL, Docker) | ✅ Completado |
-| 2 | Autenticación (JWT, Google OAuth, Refresh Rotation) | ✅ Completado |
-| 3 | Users (perfil, badges, avatar Cloudinary, activity log, onboarding) | ✅ Completado |
+| 2 | Autenticación (JWT, Google OAuth, Refresh Rotation, OTP) | ✅ Completado |
+| 3 | Users (perfil, badges, avatar Cloudinary, activity log, onboarding, GDPR) | ✅ Completado |
 | 4 | Boti (personaje, expresiones, mood dinámico, memoria MongoDB) | ✅ Completado |
-| 7 | IA / Boti (chat IA, perfilamiento, 4 modos, recomendaciones) | ✅ Completado |
-| 5 | XP y Niveles (progression) | ✅ Completado |
-| 6 | Misiones (quests) | ✅ Completado |
-| 7 | Verificación de evidencia (verification) | ✅ Completado |
-| 8 | Economía (economy) | ✅ Completado |
-| 9 | Tienda + Inventario (shop, inventory) | ✅ Completado |
-| 10 | Personalización (customization) | ✅ Completado |
-| 11 | Logros y Rachas (achievements, streaks) | ✅ Completado |
-| 12 | Sistema de confianza (trust) | ✅ Completado |
-| 13 | Diario de recuerdos (diary) | ✅ Completado |
-| 14 | IA / Chat con Boti (ai) | ✅ Completado (en módulo boti/) |
-| 15 | Amigos (friends) | ✅ Completado |
-| 15b | Rankings | ✅ Completado |
-| 16 | Colección (collection) | ✅ Completado |
-| 17 | Notificaciones (notifications) | ⏳ Pendiente |
-| 18 | Panel de administración (admin) | ✅ Completado |
+| 5 | XP y Niveles (progression, exponential curve, leaderboard) | ✅ Completado |
+| 6 | Misiones (26 seeds, weekly, streak multiplier, multi-step, level unlock) | ✅ Completado |
+| 7 | Verificación (Groq Vision, Whisper, Geofence, batch, streaming SSE) | ✅ Completado |
+| 8 | Economía (coins transaccional, 50+ shop items, mystery box) | ✅ Completado |
+| 9 | Tienda + Inventario (visual catalog, equip/unequip, Boti preview) | ✅ Completado |
+| 10 | Personalización (apariencia Boti, 5 presets, preview, save) | ✅ Completado |
+| 11 | Logros y Rachas (30 badges, 8 milestones, protection) | ✅ Completado |
+| 12 | Sistema de confianza (score, niveles, cooldown, rehabilitación, fraud alerts) | ✅ Completado |
+| 13 | Diario de recuerdos (timeline, mapa clustering, calendar, stats) | ✅ Completado |
+| 14 | IA / Chat con Boti (Groq, 4 modos, perfilamiento, recommendations) | ✅ Completado |
+| 15 | Amigos (amistad, follow, feed, celebraciones, retos, comparaciones) | ✅ Completado |
+| 15b | Rankings (global, friends, streak, xp, missions, category, badges, notifications) | ✅ Completado |
+| 16 | Colección (35 items, 5 tipos, auto-unlock, mystery box) | ✅ Completado |
+| 17 | Notificaciones (ranking notifications + fraud alerts) | ⏳ Pendiente sistema completo |
+| 18 | Panel de administración (37 endpoints, WebSocket, 2FA, fraud dashboard) | ✅ Completado |
 | 19 | PWA y responsive | ⏳ Pendiente |
+
+---
+
+## 📊 TOTAL DE ENDPOINTS
+
+| Módulo | Endpoints |
+|--------|-----------|
+| Auth | 13 |
+| Users + Badges | 16 |
+| Boti | 17 |
+| Quests | 16 |
+| Verification | 8 |
+| Progression | 3 |
+| Economy | 7 |
+| Shop | 4 |
+| Inventory | 4 |
+| Customization | 7 |
+| Achievements | 4 |
+| Streaks | 6 |
+| Trust | 9 |
+| Diary | 15 |
+| Friends | 22 |
+| Rankings | 11 |
+| Collection | 7 |
+| Admin | 37 |
+| **TOTAL** | **~206** |
 
 ---
 
@@ -112,7 +143,7 @@ src/
 7. **Seguridad primero.** No confiar en datos del cliente. Validar todo.
 8. **Cada decisión debe responder:** ¿Esto hace que Haru sea mejor para el usuario?
 9. **📝 LOGGING OBLIGATORIO.** Todo error debe ser rastreable:
-   - `console.log` con contexto identificable en cada operación crítica.
+   - `console.log` o `Logger` con contexto identificable en cada operación crítica.
    - En errores: loggear `error.message`, `error.stack`, y datos relevantes.
    - Formato consistente: `[ModuleName] Operation: details`.
    - Nunca silenciar errores con `try/catch` vacío.

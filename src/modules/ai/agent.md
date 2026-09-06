@@ -1,58 +1,51 @@
 # 🤖 AI / Boti — Agent Rules
 
 > **Antes de trabajar aquí, LEER este archivo.**
+> **Ruta:** `src/modules/ai/`
 
 ---
 
 ## 📌 PROPÓSITO
 
-Integración de inteligencia artificial con **Boti**, el compañero de **Haru**.
-
-Responsabilidades:
-- Chat conversacional con Boti
-- Recomendación de misiones
-- Generación de misiones dinámicas
-- Análisis de evidencias de verificación
-- Personalizar respuestas según contexto
+Módulo de integración de inteligencia artificial. **La funcionalidad IA real está en `src/modules/boti/`** (BotiAI, BotiProfileService). Este módulo es el contenedor/exposición.
 
 ---
 
 ## 🏗️ ARQUITECTURA
 
 ```
-Usuario → React → NestJS API → AI Service → Modelo de IA
-                                                    ↓
-                                              AI Response
-                                                    ↓
-                                        NestJS valida y decide
-                                                    ↓
-                                                React
+ai/
+├── ai.module.ts                  # Module (vacío — funcionalidad en boti/)
+└── agent.md
 ```
 
 ---
 
-## 🧠 MODOS DE BOTI
+## 🧠 DÓNDE ESTÁ LA IA REAL
 
-| Modo | Ejemplo |
-|------|---------|
-| 🎯 Recomendador | "Tengo una misión que creo que te va a gustar." |
-| 🌱 Motivador | "Llevas 6 días seguidos. ¡Uno más!" |
-| 🧭 Explorador | "Siempre eliges creatividad. Probemos aventura." |
-| 📖 Narrador | "Has recorrido bastante camino. Mira todo lo que has conseguido." |
+| Función | Servicio | Módulo |
+|---------|----------|--------|
+| Chat con Boti | `BotiAI.chat()` | `boti/boti-ai.service.ts` |
+| Mensaje diario | `BotiAI.generateDailyMessage()` | `boti/boti-ai.service.ts` |
+| Detección de modo | `BotiAI.detectMode()` | `boti/boti-ai.service.ts` |
+| Perfilamiento | `BotiProfileService.buildProfile()` | `boti/boti-profile.service.ts` |
+| Recomendaciones | `BotiProfileService.getRecommendedQuests()` | `boti/boti-profile.service.ts` |
+| Verificación fotos | `GroqVisionService.analyzeImage()` | `common/groq/groq-vision.service.ts` |
+| Verificación texto | `GroqVisionService.analyzeText()` | `common/groq/groq-vision.service.ts` |
+| Verificación audio | `GroqVisionService.analyzeAudio()` | `common/groq/groq-vision.service.ts` |
 
 ---
 
 ## 🔑 REGLAS CRÍTICAS
 
-1. **La IA PROPOONE, el backend DECIDE.** Nunca al revés.
+1. **La IA PROPONE, el backend DECIDE.** Nunca al revés.
 2. **La IA NUNCA accede directamente a la DB** para acciones críticas.
 3. **La IA NUNCA modifica:** monedas, inventario, XP, niveles, auth, permisos.
 4. **Las misiones generadas por IA** se validan antes de crear.
 5. **Las recompensas las asigna el backend.**
 6. **La memoria es estructurada**, no un log libre.
 7. **Privacidad es prioridad.**
-8. **La IA analiza evidencias** (fotos, texto) para verificación de misiones.
-9. **Las respuestas de Boti deben sentirse como el personaje**, no como un chatbot genérico.
+8. **Groq es opcional** — sin API key, Boti usa templates predefinidos.
 
 ---
 
@@ -61,11 +54,15 @@ Usuario → React → NestJS API → AI Service → Modelo de IA
 ```
 Usuario: "Tengo 10 minutos y estoy aburrido"
        ↓
-AI Service genera propuesta
+BotiAI detectMode() → 'recommender'
        ↓
-NestJS valida estructura
+BotiProfileService.getRecommendedQuests() → scoring por perfil
        ↓
-Backend asigna recompensas (XP, Coins)
+Groq llama-3.3-70b genera propuesta
+       ↓
+QuestsService.proposeQuest() → valida estructura
+       ↓
+Backend asigna recompensas (la IA NUNCA decide XP/Coins)
        ↓
 Se crea la misión en la DB
        ↓
@@ -78,4 +75,4 @@ Usuario acepta → flujo normal
 
 | Fecha | Cambio | Responsable |
 |-------|--------|-------------|
-| — | Pendiente de implementar | — |
+| 2026-08-30 | Módulo ai/ como contenedor — funcionalidad real en boti/ | Buffy |

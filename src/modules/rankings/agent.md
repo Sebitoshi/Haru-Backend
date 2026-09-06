@@ -1,6 +1,7 @@
 # 🌎 Rankings — Agent Rules
 
 > **Antes de trabajar aquí, LEER este archivo.**
+> **Ruta:** `src/modules/rankings/`
 
 ---
 
@@ -12,55 +13,34 @@ Rankings de **Haru** para que diferentes tipos de usuarios puedan destacar.
 
 ---
 
+## 🏗️ ARQUITECTURA
+
+```
+rankings/
+├── rankings.service.ts              # Score calculation, position tracking, weekly reset
+├── rankings.controller.ts           # 11 endpoints bajo /api/rankings/
+├── ranking-notification.service.ts  # Notifications + ranking badges after quest completion
+├── rankings.module.ts               # Module
+└── agent.md
+```
+
+---
+
 ## 🏆 TIPOS DE RANKING
 
-| Ranking | Descripción | Score |
-|---------|-------------|-------|
-| 🌎 Global | Todos los usuarios | XP total |
-| 👥 Amigos | Solo entre amigos | XP en período |
-| 🔥 Racha | Mayor racha actual | Días consecutivos |
-| ⭐ XP | XP ganado en período | XP |
-| 🎯 Misiones | Más misiones completadas | Count |
-| 🎨 Categoría | Por categoría específica | Misiones en categoría |
+| Ranking | Score |
+|---------|-------|
+| 🌎 Global | XP total |
+| 👥 Amigos | XP en período |
+| 🔥 Racha | Días consecutivos |
+| ⭐ XP | XP ganado en período |
+| 🎯 Misiones | Count de completadas |
+| 🎨 Categoría | Misiones en categoría específica |
 
 ### Períodos
 - **weekly** — Desde el lunes de esta semana (reset automático)
 - **monthly** — Desde el primer día del mes
 - **all_time** — Desde siempre
-
----
-
-## 📊 FLUJO
-
-```
-Evento de progreso (misión completada)
-       ↓
-RankingsService lee datos de activity_log / user_quest / streak
-       ↓
-Calcula scores por período
-       ↓
-Ordena y retorna posición del usuario
-       ↓
-El usuario ve su posición + top 50
-```
-
----
-
-## ✅ ENDPOINTS (9)
-
-| Endpoint | Método | Descripción |
-|----------|--------|-------------|
-| `GET /rankings/global` | 🔒 | Ranking global por XP |
-| `GET /rankings/friends` | 🔒 | Ranking entre amigos |
-| `GET /rankings/streak` | 🔒 | Ranking por racha |
-| `GET /rankings/xp` | 🔒 | Ranking por XP en período |
-| `GET /rankings/missions` | 🔒 | Ranking por misiones completadas |
-| `GET /rankings/category/:category` | 🔒 | Ranking por categoría |
-| `GET /rankings/me` | 🔒 | Resumen de mis posiciones |
-| `GET /rankings/categories` | 🌐 | Categorías disponibles |
-| `GET /rankings/notifications` | 🔒 | Notificaciones de ranking |
-| `PATCH /rankings/notifications/read` | 🔒 | Marcar como leídas |
-| Todos aceptan `?period=weekly\|monthly\|all_time` | | |
 
 ---
 
@@ -70,24 +50,8 @@ El usuario ve su posición + top 50
 {
   "type": "global",
   "period": "weekly",
-  "entries": [
-    {
-      "rank": 1,
-      "userId": "abc",
-      "username": "carlos",
-      "avatarUrl": "https://...",
-      "level": 12,
-      "score": 450,
-      "isMe": false
-    }
-  ],
-  "myRank": {
-    "rank": 15,
-    "userId": "xyz",
-    "username": "tu",
-    "score": 120,
-    "isMe": true
-  },
+  "entries": [{ "rank": 1, "userId", "username", "avatarUrl", "level", "score", "isMe": false }],
+  "myRank": { "rank": 15, "userId", "username", "score", "isMe": true },
   "total": 150,
   "periodLabel": "Semana del 25 ago",
   "periodStart": "2026-08-25T00:00:00Z",
@@ -98,9 +62,26 @@ El usuario ve su posición + top 50
 
 ---
 
-## 🏆 BADGES DE RANKING
+## ✅ ENDPOINTS (11)
 
-10 insignias automáticas que se desbloquean al alcanzar posiciones top:
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `GET /rankings/global` | 🔒 | Ranking global por XP |
+| `GET /rankings/friends` | 🔒 | Ranking entre amigos |
+| `GET /rankings/streak` | 🔒 | Ranking por racha |
+| `GET /rankings/xp` | 🔒 | Ranking por XP en período |
+| `GET /rankings/missions` | 🔒 | Ranking por misiones completadas |
+| `GET /rankings/category/:category` | 🔒 | Ranking por categoría |
+| `GET /rankings/me` | 🔒 | Resumen de mis posiciones en todos los rankings |
+| `GET /rankings/categories` | 🌐 | Categorías disponibles |
+| `GET /rankings/notifications` | 🔒 | Notificaciones de ranking |
+| `PATCH /rankings/notifications/read` | 🔒 | Marcar como leídas |
+
+Todos aceptan `?period=weekly|monthly|all_time` y `?limit=50`.
+
+---
+
+## 🏆 BADGES DE RANKING (10 — verificados automáticamente)
 
 | Badge | Condición | XP | Coins |
 |-------|-----------|-----|-------|
@@ -115,11 +96,9 @@ El usuario ve su posición + top 50
 | 👑 Rey Semanal | #1 semana | 300 | 150 |
 | 🎖️ Top 3 Semanal | Top 3 semana | 150 | 75 |
 
-Se verifican automáticamente al completar una misión.
+---
 
-## 📲 NOTIFICACIONES
-
-Se generan automáticamente después de cada misión completada:
+## 📲 NOTIFICACIONES (generadas automáticamente)
 
 | Tipo | Condición | Ejemplo |
 |------|-----------|---------|
@@ -129,7 +108,7 @@ Se generan automáticamente después de cada misión completada:
 | top_3 | Entra al top 3 | "🥇 ¡Top 1! Estás en el puesto #1" |
 | weekly_reset | Reset semanal | "Ranking semanal reiniciado" |
 
-Las notificaciones se agregan a la respuesta de `completeQuest`.
+---
 
 ## 🔑 REGLAS
 
@@ -139,7 +118,7 @@ Las notificaciones se agregan a la respuesta de `completeQuest`.
 4. **Anti-abuse:** combinar con sistema de confianza.
 5. **Solo mostrar top 50** por defecto. El usuario ve su posición exacta.
 6. **Múltiples categorías** para que diferentes perfiles destaquen.
-7. **Logging:** `[RankingsService] Operation: details`
+7. **Logging:** `[RankingsService|RankingNotificationService] Operation: details`
 
 ---
 
@@ -147,4 +126,5 @@ Las notificaciones se agregan a la respuesta de `completeQuest`.
 
 | Fecha | Cambio | Responsable |
 |-------|--------|-------------|
-| 2026-08-30 | Rankings: global, friends, streak, xp, missions, category, weekly | Buffy |
+| 2026-08-30 | Rankings: global, friends, streak, xp, missions, category, weekly, notifications | Buffy |
+| 2026-08-30 | +10 ranking badges + ranking notifications after quest completion | Buffy |

@@ -10,7 +10,7 @@
 Servicio de correos transaccionales de **Haru**.
 
 Responsabilidades:
-- Verificación de email al registrarse con **código OTP de 6 dígitos** (`sendVerificationEmail`)
+- Verificación de email con **código OTP de 6 dígitos** (`sendVerificationEmail`)
 - Recuperación de contraseña (`sendPasswordResetEmail`)
 - Notificaciones de acciones admin (`sendAdminActionEmail`)
 - Envíos genéricos y por lotes (`sendEmail`, `sendBatchEmails`)
@@ -45,15 +45,28 @@ Responsabilidades:
 
 ---
 
+## 📧 MÉTODOS
+
+| Método | Uso | Template |
+|--------|-----|----------|
+| `sendVerificationEmail(email, username, code)` | OTP 6 dígitos para verificar email | HTML con código destacado |
+| `sendPasswordResetEmail(email, username, token)` | Link de reset (1h expiry) | HTML con botón CTA |
+| `sendAdminActionEmail(email, action, details)` | Notificación de admin | HTML genérico |
+| `sendEmail(to, subject, html)` | Envío genérico | Custom |
+| `sendBatchEmails(recipients[], subject, html)` | Envío por lotes | Custom |
+| `deliver(to, subject, html)` | Transporte unificado (interno) | — |
+
+---
+
 ## 🔑 REGLAS
 
 1. **Un fallo de email NUNCA bloquea la acción principal.** Los métodos atrapan errores, loguean y devuelven `{ sent: false }`.
-2. **Dry-run siempre disponible.** Sin SMTP ni Resend se imprime en consola qué se habría enviado, incluido el código/link (clicable en desarrollo).
+2. **Dry-run siempre disponible.** Sin SMTP ni Resend se imprime en consola qué se habría enviado.
 3. **Logging obligatorio** con el Logger de Nest: `[EmailService] 📧 Operation: details`. Nunca `try/catch` vacío.
-4. **Anti-enumeración.** Los flujos de auth responden igual exista o no la cuenta (quien llama decide, no el template).
+4. **Anti-enumeración.** Los flujos de auth responden igual exista o no la cuenta.
 5. **Secreto de un solo uso y con expiración** (código OTP 30 min, reset 1h).
-6. **No crear templates por cada uso.** Si un correo nuevo comparte estructura, reutilizar `buildAuthEmail` / `buildAdminActionEmail`.
-7. **Nuevos métodos de envío → pasar por `deliver()`** (transporte unificado), nunca duplicar la lógica SMTP/Resend/dry-run.
+6. **No crear templates por cada uso.** Reutilizar `buildAuthEmail` / `buildAdminActionEmail`.
+7. **Nuevos métodos de envío → pasar por `deliver()`** (transporte unificado).
 
 ---
 
@@ -61,6 +74,6 @@ Responsabilidades:
 
 | Fecha | Cambio | Responsable |
 |-------|--------|-------------|
-| 2026-09-03 | +`sendVerificationEmail` y `sendPasswordResetEmail` con templates HTML y CTA. `EMAIL_FROM` y `FRONTEND_URL` configurables | Buffy |
-| 2026-09-03 | `sendVerificationEmail` ahora envía **código OTP de 6 dígitos** (caja destacada) en vez de link | Buffy |
-| 2026-09-03 | Refactor a **transporte unificado** (`deliver()`): SMTP (nodemailer) preferido → Resend → dry-run. Envs nuevos: `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | Buffy |
+| 2026-09-03 | +`sendVerificationEmail` y `sendPasswordResetEmail` con templates HTML y CTA | Buffy |
+| 2026-09-03 | `sendVerificationEmail` ahora envía **código OTP de 6 dígitos** (caja destacada) | Buffy |
+| 2026-09-03 | Refactor a **transporte unificado** (`deliver()`): SMTP → Resend → dry-run | Buffy |
