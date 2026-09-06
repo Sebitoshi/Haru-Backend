@@ -1,18 +1,74 @@
 # 🎒 Inventory — Agent Rules
 
 > **Antes de trabajar aquí, LEER este archivo.**
+> **Ruta:** `src/modules/inventory/`
 
 ---
 
 ## 📌 PROPÓSITO
 
-Gestionar los objetos que posee cada usuario en **Haru**.
+Gestionar los objetos que posee cada usuario en **Haru**. Equipar, desequipar, ver loadout.
 
 ---
 
-## 🎨 CATEGORÍAS
+## 🏗️ ARQUITECTURA
 
-Cuerpo | Color | Ropa | Cabeza | Ojos | Accesorios | Expresiones | Efectos | Temas | Títulos | Marcos
+```
+inventory/
+├── inventory.service.ts          # List, equip, unequip, loadout, Boti preview
+├── inventory.controller.ts       # 4 endpoints bajo /api/inventory/
+├── inventory.module.ts           # Module
+└── agent.md
+```
+
+---
+
+## 📊 SLOTS DISPONIBLES (11)
+
+`body | color | eyes | expression | head | accessories | effect | theme | title | frame | clothing`
+
+---
+
+## 📊 MODELO DE DATOS
+
+```prisma
+model UserEquipped {
+  userId + slot (unique) → itemId, itemName, itemImage, equippedAt
+}
+
+model UserShopPurchase {
+  userId, itemId (FK→ShopItem.id), quantity, totalCost, equipped, createdAt
+}
+```
+
+---
+
+## 🔄 FLUJO DE EQUIPACIÓN
+
+```
+POST /inventory/equip/:code
+       ↓
+1. Resuelve ShopItem.id por code
+2. Valida: usuario posee el item (UserShopPurchase)
+3. Determina slot desde effect.type
+4. DeleteMany UserEquipped en ese slot
+5. Create UserEquipped con nuevo item
+6. Update UserShopPurchase.equipped = true
+7. Unequip previous item's purchase record (mismo slot)
+       ↓
+Response: { equipped: true, slot, item }
+```
+
+---
+
+## 🌐 ENDPOINTS (4)
+
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `GET /inventory` | 🔒 | Mi inventario (filtros: category, slot, equipped, page, limit) |
+| `GET /inventory/equipped` | 🔒 | Items equipados + Boti preview (bodyType, bodyColor, eyeStyle, mouthStyle) |
+| `POST /inventory/equip/:code` | 🔒 | Equipar item (reemplaza slot actual) |
+| `DELETE /inventory/unequip/:slot` | 🔒 | Desequipar slot |
 
 ---
 
@@ -22,61 +78,4 @@ Cuerpo | Color | Ropa | Cabeza | Ojos | Accesorios | Expresiones | Efectos | Tem
 2. **La equipación es cosmética.** No da ventajas.
 3. **El backend valida** que el objeto exista y pertenezca al usuario.
 4. **Un item por slot.** Equipar uno quita el anterior.
-5. **El inventario se carga con el perfil.**
-
----
-
-## 📁 ESTRUCTURA
-
-```
-inventory/
-├── inventory.service.ts     # List, equip, unequip, loadout
-├── inventory.controller.ts  # 4 endpoints
-├── inventory.module.ts      # Module
-└── agent.md
-```
-
----
-
-## 📊 4 ENDPOINTS
-
-| Endpoint | Método | Descripción |
-|----------|--------|-------------|
-| `GET /inventory` | 🔒 | Mi inventario (filtros: category, slot, equipped) |
-| `GET /inventory/equipped` | 🔒 | Items equipados + preview de Boti |
-| `POST /inventory/equip/:code` | 🔒 | Equipar item (reemplaza slot actual) |
-| `DELETE /inventory/unequip/:slot` | 🔒 | Desequipar slot |
-
----
-
-## 🔄 FLUJO DE EQUIPACIÓN
-
-```
-Usuario toca "Equipar" en item
-       ↓
-POST /inventory/equip/:code
-       ↓
-┌─── Validations ─────────────────────────────────────┐
-│ 1. ¿El usuario posee este item? (UserShopPurchase)  │
-│ 2. ¿Es equippable? (no protection, no boost)       │
-│ 3. ¿Qué slot usa? (desde effect.type)               │
-└─────────────────────────────────────────────────────┘
-       ↓
-┌─── Swap ───────────────────────────────────────────┐
-│ 1. DeleteMany UserEquipped en ese slot              │
-│ 2. Create UserEquipped con nuevo item               │
-│ 3. Update UserShopPurchase.equipped = true/false    │
-└─────────────────────────────────────────────────────┘
-       ↓
-Response: { equipped: true, slot: 'color', item: {...} }
-```
-
----
-
-## 📊 MODELO UserEquipped
-
-```
-userId + slot (unique) → itemId, itemName, itemImage, equippedAt
-```
-
-Slots posibles: `body | color | clothing | head | eyes | accessories | expression | effect | theme | title | frame`
+5. **Logging:** `[InventoryService] Operation: details`

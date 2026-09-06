@@ -90,7 +90,19 @@ Responde SOLO con el mensaje para el usuario. No incluyas metadata ni JSON.`;
 
     if (!this.groq) {
       // Fallback: template-based response
-      const message = this.profileService.generateModeMessage(mode, profile, suggestedQuest);
+      let message: string;
+      if (this.isGreeting(userMessage)) {
+        message = this.buildGreetingReply();
+        return {
+          message,
+          mode: this.pickBestMode(profile),
+          expression: 'happy',
+          mood: profile.recentMood,
+          suggestedQuest: undefined,
+          profileSummary: this.summarizeProfile(profile),
+        };
+      }
+      message = this.profileService.generateModeMessage(mode, profile, suggestedQuest);
       return {
         message,
         mode,
@@ -159,7 +171,19 @@ Responde SOLO con el mensaje para el usuario. No incluyas metadata ni JSON.`;
     } catch (error) {
       this.logger.error(`Groq chat error: ${error.message}`);
       // Fallback to template
-      const message = this.profileService.generateModeMessage(mode, profile, suggestedQuest);
+      let message: string;
+      if (this.isGreeting(userMessage)) {
+        message = this.buildGreetingReply();
+        return {
+          message,
+          mode: this.pickBestMode(profile),
+          expression: 'happy',
+          mood: profile.recentMood,
+          suggestedQuest: undefined,
+          profileSummary: this.summarizeProfile(profile),
+        };
+      }
+      message = this.profileService.generateModeMessage(mode, profile, suggestedQuest);
       return {
         message,
         mode,
@@ -169,6 +193,38 @@ Responde SOLO con el mensaje para el usuario. No incluyas metadata ni JSON.`;
         profileSummary: this.summarizeProfile(profile),
       };
     }
+  }
+
+  private isGreeting(message: string): boolean {
+    const cleaned = message
+      .toLowerCase()
+      .replace(/^(necesito que me motives|necesito que me recomiendes|necesito que me ayudes|necesito que me cuentes)\.?\s*/i, '')
+      .trim();
+    return /^(hola|holi|hey|hello|hi|buenas|buenos días|buenos dias|buenas tardes|buenas noches|qué tal|que tal|cómo estás|cómo estas|como estas|como andas|qué hacеs|que haces|buen día|buen dia|hola boti|ey)\b/.test(cleaned);
+  }
+
+  private buildGreetingReply(): string {
+    const hour = new Date().getHours();
+    if (hour >= 6 && hour < 12) {
+      return this.randomFrom([
+        '¡Buenos días! ☀️ ¿Cómo arrancaste el día? Contame y armamos algo bueno juntos.',
+        '¡Buen día! 🌞 ¿Con qué energía hoy? Avísame y te preparo algo.',
+      ]);
+    }
+    if (hour >= 12 && hour < 20) {
+      return this.randomFrom([
+        '¡Hola! 👋 ¿Qué tal va tu día? Contame qué venís haciendo.',
+        '¡Hola! 🌟 ¿Cómo estás? Pegada la pausa y vemos qué hacemos.',
+      ]);
+    }
+    return this.randomFrom([
+      '¡Hola! 🌙 ¿Todavía despierto? Si querés algo tranqui, contame.',
+      '¡Buenas! ✨ ¿Descansando o con ganas de algo cortito? Vos decime.',
+    ]);
+  }
+
+  private randomFrom<T>(arr: T[]): T {
+    return arr[Math.floor(Math.random() * arr.length)];
   }
 
   // ─── GENERATE BOTI DAILY MESSAGE ───────────────────

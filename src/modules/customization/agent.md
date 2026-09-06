@@ -1,38 +1,23 @@
 # 👕 Customization — Agent Rules
 
 > **Antes de trabajar aquí, LEER este archivo.**
+> **Ruta:** `src/modules/customization/`
 
 ---
 
 ## 📌 PROPÓSITO
 
-Personalización visual del Boti del usuario en **Haru**.
+Personalización visual del Boti del usuario en **Haru**. Apariencia, preview, presets, reset.
 
 ---
 
-## 🎨 CATEGORÍAS
-
-Cuerpo | Color | Ropa | Cabeza | Ojos | Accesorios | Expresiones | Efectos
-
----
-
-## 🔑 REGLAS
-
-1. **Solo usar objetos que el usuario posea.**
-2. **100% cosmética.** No afecta stats, XP, coins.
-3. **El backend valida** que el objeto exista y esté en inventario.
-4. **Cada categoría: solo un objeto a la vez.**
-5. **Presets:组合 predefinidas que resetean todo.**
-
----
-
-## 📁 ESTRUCTURA
+## 🏗️ ARQUITECTURA
 
 ```
 customization/
-├── customization.service.ts     # Appearance, preview, presets, reset
-├── customization.controller.ts  # 7 endpoints
-├── customization.module.ts      # Module
+├── customization.service.ts      # Appearance, preview, presets, reset, save
+├── customization.controller.ts   # 7 endpoints bajo /api/customization/
+├── customization.module.ts       # Module
 └── agent.md
 ```
 
@@ -47,6 +32,7 @@ customization/
   "eyeStyle": "round",
   "mouthStyle": "smile",
   "expression": "calm",
+  "headAccessory": null,
   "accessories": null,
   "effect": null,
   "theme": null,
@@ -62,10 +48,10 @@ customization/
 | ID | Nombre | Look |
 |----|--------|------|
 | default | 🌸 Haru Default | Azul clásico, round, smile |
-| cute | 🌸 Adorable Boti | Mini, rosa, happy |
+| cute | Adorable Boti | Mini, rosa, happy |
 | cool | 😎 Boti Cool | Tall, dark, stars, cool |
-| nature | 🌿 Naturaleza | Standard, verde, smile |
-| galaxy | 🌌 Galaxia | Tall, purple, stars, excited |
+| nature | 🌿 Boti Naturaleza | Standard, verde, smile |
+| galaxy | 🌌 Boti Galaxia | Tall, purple, stars, excited |
 
 ---
 
@@ -73,11 +59,11 @@ customization/
 
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
-| `GET /customization/boti` | 🔒 | Apariencia completa de Boti + equipped |
+| `GET /customization/boti` | 🔒 | Apariencia completa + equipped items + isDefault |
 | `POST /customization/preview` | 🔒 | Preview de combinación (sin equipar) |
 | `GET /customization/presets` | 🔒 | 5 presets predefinidos |
-| `POST /customization/presets/:id/apply` | 🔒 | Aplicar preset (resetea todo) |
-| `POST /customization/presets/save` | 🔒 | Guardar config actual como preset |
+| `POST /customization/presets/:presetId/apply` | 🔒 | Aplicar preset (resetea todo) |
+| `POST /customization/presets/save` | 🔒 | Guardar config actual como preset (en ActivityLog) |
 | `GET /customization/presets/user` | 🔒 | Mis presets guardados |
 | `DELETE /customization/reset` | 🔒 | Resetear a defaults |
 
@@ -105,3 +91,14 @@ customization/
 │ → Frontend renderiza Boti con nuevos items           │
 └──────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 🔑 REGLAS
+
+1. **Solo usar objetos que el usuario posea.**
+2. **100% cosmética.** No afecta stats, XP, coins.
+3. **El backend valida** que el objeto exista y esté en inventario.
+4. **Cada categoría: solo un objeto a la vez.**
+5. **Presets resetean todo.**
+6. **Logging:** `[CustomizationService] Operation: details`

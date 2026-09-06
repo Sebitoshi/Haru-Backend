@@ -1,195 +1,120 @@
 # 🪙 Economy — Agent Rules
 
 > **Antes de trabajar aquí, LEER este archivo.**
+> **Ruta:** `src/modules/economy/`
 
 ---
 
 ## 📌 PROPÓSITO
 
-Sistema de economía virtual de **Haru**.
+Sistema de economía virtual de **Haru**. Coins como moneda RPG — sin dinero real.
 
 ---
 
-## 🪙 COINS
-
-**Moneda virtual: Coins.** Se gana con misiones, logros, rachas. Se usa en la tienda cosmética.
-
-**IMPORTANTE:** Sin dinero real, inversiones, bancos, trading. Exclusivamente RPG.
-
----
-
-## 🔑 REGLAS
-
-1. **El backend controla todo el saldo.** Nunca confiar en el cliente.
-2. **No se permite saldo negativo.** Siempre validar antes de gastar.
-3. **Cada transacción se registra** en el modelo `Transaction` con tipo, monto, balance y metadata.
-4. **Operaciones transaccionales.** earn/spend usan `$transaction` de Prisma para atomicidad.
-5. **La economía es cosmética/divertida.** No hay ventajas competitivas ("pay to win").
-
----
-
-## 📁 ESTRUCTURA
+## 🏗️ ARQUITECTURA
 
 ```
 economy/
-├── economy.service.ts        # Core: earn, spend, balance, shop, buy
-├── economy.controller.ts     # 7 endpoints públicos
-├── economy.module.ts         # Module con exports
-└── agent.md                  # Este archivo
+├── economy.service.ts           # Core: earn, spend, balance, shop catalog (50+ items), buy, stats
+├── economy.controller.ts        # 7 endpoints bajo /api/economy/
+├── economy.module.ts            # Module (imports CollectionModule)
+└── agent.md
 ```
 
----
-
-## 💰 FLUJO DE COINS
-
-### Earn (ganar coins)
-```
-Acción del usuario (misión, badge, nivel, racha)
-       ↓
-ProgressionService.addCoins() o EconomyService.earnCoins()
-       ↓
-┌─── EconomyService ──────────────────────────────────────┐
-│ 1. Leer balance actual                                  │
-│ 2. Calcular nuevo balance = actual + amount             │
-│ 3. $transaction: update User + create Transaction      │
-│    (atomicidad garantizada)                             │
-└─────────────────────────────────────────────────────────┘
-       ↓
-Response: { earned, totalCoins, transactionId }
-```
-
-### Spend (gastar coins)
-```
-Usuario compra item en tienda
-       ↓
-EconomyService.buyItem()
-       ↓
-┌─── Validaciones ────────────────────────────────────────┐
-│ - Item existe y está activo                             │
-│ - User puede pagar (balance >= precio * cantidad)       │
-│ - No excede maxPerUser (si aplica)                      │
-└─────────────────────────────────────────────────────────┘
-       ↓
-EconomyService.spendCoins()
-       ↓
-┌─── $transaction ───────────────────────────────────────┐
-│ 1. Validar saldo >= amount                              │
-│ 2. newBalance = totalCoins - amount                     │
-│ 3. Update User.totalCoins + create Transaction         │
-│    (negative amount, balance recorded)                  │
-└─────────────────────────────────────────────────────────┘
-       ↓
-applyItemEffect() → streak_protection, cosmetic, boost...
-       ↓
-Response: { success, item, balance, effect }
-```
-
----
-
-## 🏪 TIENDA — CATÁLOGO
-
-### 🛡️ Protección (category: protection)
-| Item | Precio | Efecto | Max |
-|------|--------|--------|-----|
-| Protección de Racha | 100 | +1 protección de racha | 10 |
-| Pack x3 | 250 | +3 protecciones | 5 |
-
-### 👕 Cosméticos (category: cosmetic)
-| Item | Precio | Rareza |
-|------|--------|--------|
-| Tema Atardecer | 200 | uncommon |
-| Tema Océano | 200 | uncommon |
-| Tema Bosque | 200 | uncommon |
-| Tema Galaxia | 400 | rare |
-| Tema Sakura | 400 | rare |
-| Boti Festivo | 300 | rare |
-| Boti Dormilón | 250 | uncommon |
-
-### 🏠 Decoraciones (category: decoration)
-| Item | Precio | Rareza |
-|------|--------|--------|
-| Marco Dorado | 500 | rare |
-| Marco Floral | 300 | uncommon |
-| Título: Explorador | 150 | uncommon |
-| Título: Leyenda | 1000 | epic |
-
-### ⭐ Especiales (category: special)
-| Item | Precio | Efecto | Max |
-|------|--------|--------|-----|
-| Boost x2 XP | 800 | x2 XP por 24h | 3 |
-| Amuleto de la Suerte | 350 | x1.25 coins en próxima misión | 5 |
-| Caja Misteriosa | 600 | Coleccionable random rare+ | 3 |
+### Auto-seed en onModuleInit
+El catálogo de 50+ items se semilla automáticamente en `ShopItem` al iniciar la app (por FK de `UserShopPurchase`).
 
 ---
 
 ## 📊 MODELOS PRISMA
 
-### Transaction
-```
-id          String (uuid)
-userId      String
-type        TransactionType (enum)
-amount      Int             // +earn / -spend
-balance     Int             // balance post-transacción
-source      String          // quest_id, badge_code, item_code
-description String?
-metadata    Json?           // { questTitle, itemName, ... }
-createdAt   DateTime
-```
+```prisma
+enum TransactionType {
+  quest_completed | badge_unlocked | collectible_unlocked | level_up
+  streak_milestone | daily_bonus | admin_grant | refund
+  shop_purchase | streak_protection | gifting | admin_deduction
+  welcome_bonus
+}
 
-### TransactionType (enum)
-```
-quest_completed | badge_unlocked | collectible_unlocked | level_up
-streak_milestone | daily_bonus | admin_grant | refund
-shop_purchase | streak_protection | gifting | admin_deduction
-welcome_bonus
-```
+model Transaction {
+  id, userId, type, amount (±), balance, source, description?, metadata?, createdAt
+}
 
-### ShopItem
-```
-code        String (unique)
-name        String
-description String
-category    ShopItemCategory (enum)
-rarity      ShopItemRarity (enum)
-price       Int
-imageUrl    String?
-effect      Json            // { type, key, value, multiplier, ... }
-isActive    Boolean
-isLimited   Boolean
-expiresAt   DateTime?
-maxPerUser  Int?
-```
+model ShopItem {
+  code (unique), name, description, category, rarity, price, imageUrl?
+  effect (Json), isActive, isLimited, expiresAt?, maxPerUser?
+}
 
-### UserShopPurchase
-```
-userId, itemId, quantity, totalCost, createdAt
+model UserShopPurchase {
+  userId, itemId (FK→ShopItem.id), quantity, totalCost, equipped, createdAt
+}
 ```
 
 ---
 
-## 📋 ACTUALIZACIONES
+## 🏪 CATÁLOGO COMPLETO (50+ items)
 
-| Fecha | Cambio | Responsable |
-|-------|--------|-------------|
-| 2026-09-05 | Caja Misteriosa integrada: compra desbloquea coleccionable aleatorio vía CollectionService (antes TODO, no entregaba nada) | Buffy |
-| 2026-09-05 | Fix tienda: `isActive` opcional ahora default activo (la tienda estaba vacía); catálogo se siembra en tabla ShopItem (FK de UserShopPurchase); agrupación de compras por code | Buffy |
+### 🛡️ Protección (2)
+| Code | Nombre | Precio | Rareza | Efecto | Max |
+|------|--------|--------|--------|--------|-----|
+| streak_protection_1 | Protección de Racha | 100 | common | +1 protección | 10 |
+| streak_protection_3 | Pack x3 | 250 | uncommon | +3 protecciones | 5 |
+
+### 🎨 Cosméticos — Themes (5)
+| Code | Nombre | Precio | Rareza |
+|------|--------|--------|--------|
+| theme_sunset | Atardecer | 200 | uncommon |
+| theme_ocean | Océano | 200 | uncommon |
+| theme_forest | Bosque | 200 | uncommon |
+| theme_galaxy | Galaxia | 400 | rare |
+| theme_sakura | Sakura | 400 | rare |
+
+### 🎨 Cosméticos — Boti Expressions (2)
+| Code | Nombre | Precio | Rareza |
+|------|--------|--------|--------|
+| boti_party | Boti Festivo | 300 | rare |
+| boti_sleepy | Boti Dormilón | 250 | uncommon |
+
+### 🏠 Decoraciones (4)
+| Code | Nombre | Precio | Rareza |
+|------|--------|--------|--------|
+| frame_golden | Marco Dorado | 500 | rare |
+| frame_floral | Marco Floral | 300 | uncommon |
+| frame_neon | Marco Neón | 700 | epic |
+| title_explorer | Título: Explorador | 150 | uncommon |
+| title_legend | Título: Leyenda | 1000 | epic |
+| title_pioneer | Título: Pionero | 2000 | legendary |
+
+### ⭐ Especiales (3)
+| Code | Nombre | Precio | Rareza | Efecto | Max |
+|------|--------|--------|--------|--------|-----|
+| double_xp_boost | Boost x2 XP | 800 | epic | x2 XP por 24h | 3 |
+| lucky_charm | Amuleto de la Suerte | 350 | rare | x1.25 coins en próxima misión | 5 |
+| mystery_box | Caja Misteriosa | 600 | epic | Coleccionable random rare+ | 3 |
+
+### 👕 Cosméticos Visuales (40+ items)
+- **Body:** round (100), square (100), tall (200), mini (350)
+- **Color:** sakura/ocean/forest (50), sunset (100), galaxy (200), golden (500), rainbow (1000)
+- **Eyes:** round (75), sleepy (150), stars (300), heart (400)
+- **Expression:** happy (50), wink (100), excited (120), cool (250), party (400)
+- **Head:** cap (100), crown (600), flower (150), antenna (300)
+- **Accessories:** glasses (100), scarf (200), wings (1500)
+- **Effect:** sparkle (200), fire (400), rain (180), petals (350)
 
 ---
 
-## 🎯 EARN SOURCES
+## 💰 EARN SOURCES
 
 | Fuente | Amount | TransactionType |
 |--------|--------|-----------------|
-| Misión fácil | 10 | quest_completed |
+| Misión easy | 8 | quest_completed |
 | Misión normal | 15 | quest_completed |
-| Misión hard | 25 | quest_completed |
-| Misión especial | 50 | quest_completed |
+| Misión hard | 30 | quest_completed |
+| Misión especial | 60 | quest_completed |
 | Badge | badge.coinsReward | badge_unlocked |
 | Collectible | collectible.coinsReward | collectible_unlocked |
 | Level up | levelReward.coins | level_up |
-| Racha milestone | streakReward | streak_milestone |
-| Daily bonus | 5-20 | daily_bonus |
+| Streak milestone | milestone coins | streak_milestone |
 | Welcome | 50 | welcome_bonus |
 | Admin grant | manual | admin_grant |
 
@@ -197,12 +122,33 @@ userId, itemId, quantity, totalCost, createdAt
 
 ---
 
-## 📊 7 ENDPOINTS
+## 🔄 FLUJO DE COMPRA
+
+```
+POST /economy/shop/buy/:itemCode (+ quantity)
+       ↓
+Valida: item existe, está activo, user puede pagar, no excede maxPerUser
+       ↓
+EconomyService.spendCoins() → $transaction: update User + create Transaction
+       ↓
+Crea UserShopPurchase
+       ↓
+applyItemEffect():
+  streak_protection → incrementa User.streakProtections
+  cosmetic → log activity (equipar se maneja en /inventory)
+  theme/expression/frame/title → log activity
+  xp_boost/coins_boost → log activity con expiresAt
+  mystery_collectible → CollectionService.unlockRandomCollectible()
+```
+
+---
+
+## 🌐 ENDPOINTS (7)
 
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
 | `GET /economy/balance` | 🔒 | Balance + totalEarned + totalSpent + lastTransaction |
-| `GET /economy/transactions` | 🔒 | Historial paginado, filtro por type/fecha |
+| `GET /economy/transactions` | 🔒 | Historial paginado (?type, ?page, ?limit, ?from, ?to) |
 | `GET /economy/transactions/summary` | 🔒 | Resumen por período (today/week/month/all) |
 | `GET /economy/shop` | 🔒 | Catálogo con canAfford + owned por item |
 | `POST /economy/shop/buy/:itemCode` | 🔒 | Comprar item (+ quantity) |
@@ -211,67 +157,23 @@ userId, itemId, quantity, totalCost, createdAt
 
 ---
 
-## 🔄 INTEGRACIONES
+## 🔑 REGLAS
 
-### ProgressionService → EconomyService
-```typescript
-// addCoins delega a EconomyService.earnCoins()
-// spendCoins delega a EconomyService.spendCoins()
-// addXp level-up → economyService.earnCoins(type: 'level_up')
-```
-
-### QuestsService → EconomyService
-```typescript
-// completeQuest() → economyService.earnCoins(type: 'quest_completed')
-// streak bonus calculado por economyService.calculateStreakBonus()
-```
-
-### AchievementsService → EconomyService
-```typescript
-// checkBadges() → economyService.earnCoins(type: 'badge_unlocked')
-```
-
-### CollectionService → EconomyService
-```typescript
-// checkAndUnlock() → economyService.earnCoins(type: 'collectible_unlocked')
-// Caja Misteriosa: EconomyService.buyItem() → CollectionService.unlockRandomCollectible()
-```
-
-### AdminModule → EconomyService
-```typescript
-// adminGrantCoins() → economyService.earnCoins(type: 'admin_grant')
-// adminDeductCoins() → economyService.spendCoins(type: 'admin_deduction')
-// getEconomyStats() → economyService.getEconomyStats()
-```
+1. **El backend controla todo el saldo.** Nunca confiar en el cliente.
+2. **No se permite saldo negativo.** Siempre validar antes de spend.
+3. **Cada transacción se registra** en Transaction con tipo, monto, balance.
+4. **Operaciones transaccionales.** earn/spend usan `$transaction` de Prisma.
+5. **La economía es cosmética/divertida.** No hay ventajas competitivas.
+6. **Seed automático:** El catálogo se semilla en `onModuleInit`.
+7. **Logging:** `[EconomyService] Operation: details`
 
 ---
 
-## 🛡️ SEGURIDAD
+## 📋 ACTUALIZACIONES
 
-1. **Validación server-side** — Nunca confiar en amounts del cliente
-2. **Atomicidad** — `$transaction` de Prisma garantiza consistencia
-3. **Max por usuario** — `maxPerUser` previene compra masiva
-4. **No saldo negativo** — check antes de spend
-5. **Admin rate limit** — endpoints admin tienen throttling separado
-
----
-
-## 📋 LOGGING
-
-Todos los要害 operaciones loguean:
-```
-[EconomyService] EarnCoins: userId=xxx, +25 quest_completed
-[EconomyService] SpendCoins: userId=xxx, -100 shop_purchase
-[EconomyService] BuyItem OK: userId=xxx, 1x Protección de Racha, spent=100
-```
-
----
-
-## 💡 FUTURAS MEJORAS
-
-1. ** Tienda rotativa** — Items que cambian cada 24h
-2. ** Ofertas flash** — Descuentos temporales
-3. ** Intercambio entre usuarios** — Gifting coins/items
-4. ** Moneda premium** — Para features speciales (sin pay-to-win)
-5. ** Economía dinámica** — Precios basados en demanda
-6. ** Cashback events** — "Esta semana ganas x2 coins en naturaleza"
+| Fecha | Cambio | Responsable |
+|-------|--------|-------------|
+| 2026-09-05 | Caja Misteriosa integrada: compra desbloquea coleccionable aleatorio | Buffy |
+| 2026-09-05 | Fix tienda: `isActive` default true, seed automático en onModuleInit, FK resolution | Buffy |
+| 2026-09-05 | +50 items cosméticos (body, color, eyes, expression, head, accessories, effects) | Buffy |
+| 2026-09-05 | +adminGrantCoins, adminDeductCoins, getEconomyStats | Buffy |

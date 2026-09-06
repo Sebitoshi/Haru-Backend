@@ -7,63 +7,33 @@
 
 ## 📌 PROPÓSITO
 
-Sistema de gamificación de **Haru**: XP, niveles, insignias, logros y recompensas.
+Sistema de gamificación de **Haru**: XP, niveles, leaderboard.
 
 ---
 
-## 🔄 EL FLUJO COMPLETO DE GAMIFICACIÓN
+## 🏗️ ARQUITECTURA
 
 ```
-Usuario acepta misión
-       ↓
-Usuario realiza la actividad en el mundo real
-       ↓
-Usuario sube evidencia (foto/video/audio/texto/ubicación)
-       ↓
-IA analiza la evidencia (Groq Vision / Whisper / Geofence)
-       ↓
-Verificación aprobada → Misión completada
-       ↓
-┌──────────────────────────────────────────────────────┐
-│ 🎯 GAMIFICACIÓN SE EJECUTA                          │
-│                                                      │
-│ 1. XP Calculado                                      │
-│    baseXP × streakMultiplier = finalXP               │
-│    (easy:10, normal:25, hard:50, special:100)         │
-│    (streak: +10% por día, max +50%)                  │
-│                                                      │
-│ 2. XP Creditado al usuario                           │
-│    User.totalXp += finalXP                           │
-│                                                      │
-│ 3. Level Calculado                                   │
-│    XP curve: 100 × 1.5^(level-2)                    │
-│    Si User.level subió → Level Up!                   │
-│    → Recompensa: coins bonus por nivel               │
-│                                                      │
-│ 4. Coins Creditados                                  │
-│    baseCoins × streakMultiplier = finalCoins         │
-│    User.totalCoins += finalCoins                     │
-│                                                      │
-│ 5. Streak Actualizado                                │
-│    ¿Actividad consecutiva? → streak++                │
-│    ¿Racha rota? → ¿Tiene protección? → usa 1        │
-│    Si no → "No pasa nada 🌱. Tu aventura continúa"  │
-│                                                      │
-│ 6. Badges Verificados                                │
-│    Se revisan TODOS los badges posibles              │
-│    Si cumple requisito → badge desbloqueado          │
-│    → Recompensa: XP + coins del badge                │
-│                                                      │
-│ 7. Respuesta al usuario                              │
-│    { rewards, progression, streak, newBadges }       │
-└──────────────────────────────────────────────────────┘
+progression/
+├── progression.service.ts       # XP calc, level calc, addXp, addCoins, leaderboard
+├── progression.controller.ts    # 3 endpoints: /progression/me, /levels, /leaderboard
+├── progression.module.ts        # Module (imports EconomyModule)
+└── agent.md
+
+achievements/
+├── achievements.service.ts      # 30 badges: check, auto-unlock, seed, ranking badges
+├── achievements.controller.ts   # 4 endpoints: /achievements/me, /catalog, /seed
+├── achievements.module.ts       # Module (imports ProgressionModule)
+└── agent.md
 ```
 
 ---
 
-## 📊 XP Y NIVELES
+## 📊 XP CURVE — Exponential Growth
 
-### Curva de XP
+```
+XP_needed(N) = floor(100 × 1.5^(N-2))
+```
 
 | Nivel | XP para siguiente | XP total acumulado |
 |-------|-------------------|--------------------|
@@ -76,118 +46,135 @@ Verificación aprobada → Misión completada
 | 30→31 | 155,687 | 1,630,610 |
 | 50 | MAX | — |
 
-**Fórmula:** `XP_needed(N) = 100 × 1.5^(N-2)`
+---
 
-### Fuentes de XP
-
-| Fuente | XP base | Multiplier |
-|--------|---------|------------|
-| Misión easy | 10 | × streak |
-| Misión normal | 25 | × streak |
-| Misión hard | 50 | × streak |
-| Misión special | 100 | × streak |
-| Streak milestone | 30-3000 | — |
-| Badge desbloqueado | 25-2000 | — |
-| Login diario | 5 | — |
-| Onboarding | 50 | — |
-
-### Streak Multiplier
-```
-0 días → ×1.0
-3 días → ×1.3 (+30%)
-5 días → ×1.5 (+50%) ← máximo
-```
-
-### Recompensas por Nivel
+## 🎁 RECOMPENSAS POR NIVEL
 
 | Nivel | Título | Coins | Desbloqueo |
 |-------|--------|-------|------------|
 | 2 | Explorador Novato | 20 | — |
 | 3 | Aventurero | 30 | Categoría Aprendizaje |
+| 4 | Explorador Nato | 40 | Categoría Aventura |
 | 5 | Buscador de Realidades | 50 | Misiones hard |
 | 7 | Sembrador de Experiencias | 70 | Categoría Social |
 | 10 | Maestro de Misiones | 100 | Misiones especiales |
 | 15 | Explorador Avanzado | 150 | Personalización avanzada |
 | 20 | Leyenda de Haru | 250 | Todas las categorías |
+| 30 | Maestro Absoluto | 500 | Título exclusivo |
 | 50 | 🌸-shadow✨ | 1000 | Nivel máximo |
+
+### Cómo funciona addXp
+```
+1. Calcula newTotalXp = user.totalXp + xpAmount
+2. Calcula newLevel = levelFromTotalXp(newTotalXp)
+3. Si newLevel > oldLevel → leveledUp
+4. Actualiza User.totalXp + User.level
+5. Log en ActivityLog (action: 'xp_gained')
+6. Si leveledUp → EconomyService.earnCoins(levelReward.coins, 'level_up')
+```
 
 ---
 
-## 🏆 BADGES / INSIGNIAS
+## 🏆 30 BADGES (AchievementsService)
 
-### Categorías de badges
+### Quests (6)
+| Code | Icono | Requisito | XP | Coins |
+|------|-------|-----------|-----|-------|
+| first_quest | 🌱 | 1 quest | 25 | 10 |
+| quest_5 | 🔍 | 5 quests | 50 | 25 |
+| quest_10 | 🗺️ | 10 quests | 100 | 50 |
+| quest_25 | 🧭 | 25 quests | 200 | 100 |
+| quest_50 | ⚔️ | 50 quests | 500 | 250 |
+| quest_100 | 🏆 | 100 quests | 1000 | 500 |
 
-| Categoría | Ejemplos | Requisito |
-|-----------|----------|-----------|
-| 🎯 quests | Primera Misión, Explorador, Leyenda | Completar X misiones |
-| 🔥 streaks | En llamas, Imparable, Dedicación | Racha de X días |
-| ⭐ levels | Nivel 5, 10, 20, 50 | Alcanzar nivel X |
-| 🎨 categories | Amante de la Naturaleza, Mente Creativa | X misiones en categoría |
-| ✨ special | Madrugador, Búho Nocturno, Coleccionista | Condiciones especiales |
+### Streaks (5)
+| Code | Icono | Requisito | XP | Coins |
+|------|-------|-----------|-----|-------|
+| streak_3 | 📅 | 3 días racha | 30 | 15 |
+| streak_7 | 🔥 | 7 días racha | 75 | 40 |
+| streak_14 | ⚡ | 14 días racha | 150 | 75 |
+| streak_30 | 👑 | 30 días racha | 300 | 150 |
+| streak_100 | 💎 | 100 días racha | 1000 | 500 |
 
-### Badges seed (30 badges)
+### Levels (4)
+| Code | Icono | Requisito | XP | Coins |
+|------|-------|-----------|-----|-------|
+| level_5 | ⭐ | Nivel 5 | 50 | 25 |
+| level_10 | 🌟 | Nivel 10 | 100 | 50 |
+| level_20 | 💫 | Nivel 20 | 300 | 150 |
+| level_50 | 🌸 | Nivel 50 | 2000 | 1000 |
 
-```
-POST /api/achievements/seed
-→ Crea 30 badges en la base de datos
-```
+### Categories (7)
+| Code | Icono | Requisito | XP | Coins |
+|------|-------|-----------|-----|-------|
+| nature_5 | 🌿 | 5 nature | 50 | 25 |
+| creativity_5 | 🎨 | 5 creativity | 50 | 25 |
+| kindness_5 | ❤️ | 5 kindness | 50 | 25 |
+| movement_5 | 🏃 | 5 movement | 50 | 25 |
+| social_5 | 👥 | 5 social | 50 | 25 |
+| adventure_5 | 🗺️ | 5 adventure | 50 | 25 |
+| all_categories | 🌈 | 1 de cada categoría | 200 | 100 |
+
+### Special (4)
+| Code | Icono | Requisito | XP | Coins |
+|------|-------|-----------|-----|-------|
+| early_bird | 🌅 | Misión antes de 8am | 30 | 15 |
+| night_owl | 🦉 | Misión después de 10pm | 30 | 15 |
+| weekend_warrior | ⚔️ | 3 misiones en fin de semana | 75 | 40 |
+| collector | 🎒 | 10 badges desbloqueados | 150 | 75 |
+
+### Ranking Badges (10)
+Se verifican automáticamente tras completar misión:
+- 🏆 Campeón Global (#1) — 500 XP / 250 coins
+- 🥇 Top 3 Global — 300 XP / 150 coins
+- 🌟 Top 10 Global — 150 XP / 75 coins
+- ⭐ Top 50 Global — 75 XP / 40 coins
+- 🔥 Rey de la Racha (#1 streak) — 400 XP / 200 coins
+- ⚡ Top 3 Rachas — 200 XP / 100 coins
+- 🎯 Maestro de Misiones (#1) — 400 XP / 200 coins
+- 🏅 Top 3 Misiones — 200 XP / 100 coins
+- 👑 Rey Semanal (#1 semana) — 300 XP / 150 coins
+- 🎖️ Top 3 Semanal — 150 XP / 75 coins
 
 ### Auto-detección
-
-Después de cada misión completada:
 ```
-checkBadges(userId)
-  → Revisa todos los badges posibles
-  → Desbloquea los que cumple
-  → Otorga XP + coins del badge
-  → Retorna nuevos badges desbloqueados
+checkBadges(userId):
+  → Carga stats: quests completed (countByCategory), streak, level, hourOfDay, etc.
+  → Para cada badge no desbloqueado:
+    ¿Cumple requisito? → crear UserBadge + retorna badge info
 ```
 
 ---
 
 ## 🌐 ENDPOINTS
 
-### Progression (`/api/progression`)
-
+### Progression (3)
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
-| `GET /progression/me` | 🔒 | Mi nivel, XP, coins, progreso |
-| `GET /progression/levels` | 🔒 | Tabla de niveles con recompensas |
-| `GET /progression/leaderboard` | 🔒 | Ranking (xp/level/coins/streak) |
+| `GET /progression/me` | 🔒 | Mi nivel, XP, coins, progress, stats, nextLevel |
+| `GET /progression/levels` | 🔒 | Tabla de niveles con XP requirements y rewards |
+| `GET /progression/leaderboard` | 🔒 | Ranking (?type=xp\|level\|coins\|streak, ?limit=20) |
 
-### Achievements (`/api/achievements`)
-
+### Achievements (4)
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
 | `GET /achievements/me` | 🔒 | Mis badges (desbloqueados + bloqueados) |
-| `POST /achievements/me/check` | 🔒 | Verificar y desbloquear nuevos badges |
-| `GET /achievements/catalog` | 🔒 | Catálogo completo de badges |
+| `POST /achievements/me/check` | 🔒 | Verificar y desbloquear |
+| `GET /achievements/catalog` | 🔒 | Catálogo completo |
 | `POST /achievements/seed` | 🌐 | Sembrar 30 badges |
 
 ---
 
-## 📊 MODELO DE DATOS
+## 🔄 INTEGRACIÓN
 
-```
-User
-├── level: Int (default 1)
-├── totalXp: Int (default 0)
-├── totalCoins: Int (default 0)
-
-Badge
-├── id, code (unique), name, description, icon
-├── category, requirement (Json)
-├── xpReward, coinsReward
-
-UserBadge
-├── userId, badgeId (unique)
-├── unlockedAt
-
-ActivityLog
-├── action: 'xp_gained' → { amount, source, oldTotal, newTotal, leveledUp }
-├── action: 'coins_gained' → { amount, source, newTotal }
-├── action: 'coins_spent' → { amount, source, newTotal }
-```
+| Módulo | Cómo se integra |
+|--------|-----------------|
+| **Quests** | `completeQuest` → addXp + addCoins + checkBadges |
+| **Streaks** | Streak multiplier se aplica al XP de la misión |
+| **Verification** | Verificación aprobada → quest completada → gamificación |
+| **Economy** | Coins ganados aquí se gastan en shop |
+| **Rankings** | checkRankingBadges() se ejecuta después de completeQuest |
+| **Collection** | checkAndUnlock() se ejecuta después de completeQuest |
 
 ---
 
@@ -196,24 +183,10 @@ ActivityLog
 1. **El backend calcula TODO.** Nunca confiar en el cliente.
 2. **XP y coins se calculan en `completeQuest`.** No hay otra forma de ganar XP.
 3. **Los badges se verifican automáticamente** después de cada misión.
-4. **"No pasa nada 🌱. Tu aventura continúa."** No castigar al usuario por perder racha.
+4. **"No pasa nada 🌱. Tu aventura continúa."** No castigar al usuario.
 5. **Las recompensas de nivel son automáticas.** Se otorgan al subir de nivel.
 6. **El leaderboard es público.** Cualquier usuario puede verlo.
-7. **Logging:** `[ProgressionService] Operation: details`
-8. **Logging:** `[AchievementsService] CheckBadges: userId=xxx, new=3`
-
----
-
-## 📋 INTEGRACIÓN CON OTROS MÓDULOS
-
-| Módulo | Cómo se integra |
-|--------|-----------------|
-| **Quests** | `completeQuest` → addXp + addCoins + checkBadges |
-| **Streaks** | Streak multiplier se aplica al XP de la misión |
-| **Verification** | Verificación aprobada → quest completada → gamificación |
-| **Economy** | Coins ganados aquí se gastan en shop |
-| **Shop** | Compras gastan coins (spendCoins) |
-| **Admin** | Ve stats de progreso de todos los usuarios |
+7. **Logging:** `[ProgressionService|AchievementsService] Operation: details`
 
 ---
 
@@ -222,3 +195,5 @@ ActivityLog
 | Fecha | Cambio | Responsable |
 |-------|--------|-------------|
 | 2026-08-27 | Implementación completa: XP, niveles, badges, leaderboard, integración con quests | Buffy |
+| 2026-08-27 | +10 ranking badges (auto-check after quest completion) | Buffy |
+| 2026-09-05 | Fix: streak badges usan longestStreak (antes nunca se otorgaban) | Buffy |
